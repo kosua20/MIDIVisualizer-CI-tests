@@ -130,7 +130,7 @@ std::string State::helpText(size_t & alignSize){
 	}
 	size_t maxLength = 0;
 	for(const auto & param : _sharedInfos){
-		maxLength = std::max(maxLength, param.first.size());
+		maxLength = (std::max)(maxLength, param.first.size());
 	}
 	alignSize = maxLength + 4;
 
@@ -312,7 +312,7 @@ void State::load(const Arguments & configArgs){
 		}
 
 		if(key == "layers"){
-			const size_t bound = std::min(layersMap.size(), arg.second.size());
+			const size_t bound = (std::min)(layersMap.size(), arg.second.size());
 			for(size_t id = 0; id < bound; ++id){
 				layersMap[id] = Configuration::parseInt(arg.second[id]);
 			}
