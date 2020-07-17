@@ -6,6 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 
 std::map<std::string, State::OptionInfos> State::_sharedInfos;
 

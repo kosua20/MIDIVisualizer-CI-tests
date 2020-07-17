@@ -1,6 +1,7 @@
 #include "Configuration.h"
 
 #include <iostream>
+#include <algorithm>
 #include <stdio.h>
 
 std::string trim(const std::string & str, const std::string & del) {
