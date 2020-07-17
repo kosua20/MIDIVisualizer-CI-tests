@@ -32,11 +32,20 @@ jobs:
 
       # Runs a set of commands using the runners shell
       - name: Configure
+        if: matrix.os == 'windows-latest'
         # Use a bash shell so we can use the same syntax for environment variable
         # access regardless of the host operating system
         shell: bash
         working-directory: ${{runner.workspace}}
-        run: cmake -S $GITHUB_WORKSPACE -B build/ -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64
+        run: cmake -S $GITHUB_WORKSPACE -B build/ -DCMAKE_BUILD_TYPE=Release -A x64
+
+      - name: Configure
+        if: matrix.os != 'windows-latest'
+        # Use a bash shell so we can use the same syntax for environment variable
+        # access regardless of the host operating system
+        shell: bash
+        working-directory: ${{runner.workspace}}
+        run: cmake -S $GITHUB_WORKSPACE -B build/ -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         working-directory: ${{runner.workspace}}
