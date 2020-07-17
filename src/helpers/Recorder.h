@@ -5,6 +5,7 @@
 #include "../rendering/Framebuffer.h"
 #include <string>
 #include <vector>
+#include <memory>
 
 // Forward declare FFmpeg objects in all cases.
 struct AVFormatContext;
