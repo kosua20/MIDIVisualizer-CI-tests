@@ -28,11 +28,14 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update && sudo apt-get install -yq xorg-dev libgtk-3-dev
-          vcpkg search ffmpeg
+          vcpkg install ffmpeg:x64-linux
+          vcpkg integrate install
 
       - name: Dependencies-macos
         if: matrix.os == 'macOS-latest'
-        run: vcpkg search ffmpeg
+        run: |
+          vcpkg install ffmpeg:x64-osx
+          vcpkg integrate install
 
       - name: Dependencies-windows
         if: matrix.os == 'windows-latest'
@@ -47,7 +50,7 @@ jobs:
         # access regardless of the host operating system
         shell: bash
         working-directory: ${{runner.workspace}}
-        run: cmake -S $GITHUB_WORKSPACE -B build/ -DCMAKE_BUILD_TYPE=Release -A x64
+        run: cmake -S $GITHUB_WORKSPACE -B build/ -DCMAKE_BUILD_TYPE=Release -A x64 -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Configure
         if: matrix.os != 'windows-latest'
@@ -55,7 +58,7 @@ jobs:
         # access regardless of the host operating system
         shell: bash
         working-directory: ${{runner.workspace}}
-        run: cmake -S $GITHUB_WORKSPACE -B build/ -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S $GITHUB_WORKSPACE -B build/ -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=/vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Build
         working-directory: ${{runner.workspace}}
