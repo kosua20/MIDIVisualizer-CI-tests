@@ -36,15 +36,15 @@ jobs:
         if: matrix.os == 'macOS-latest'
         run: |
           brew install yasm
-          vcpkg update
-          vcpkg install ffmpeg:x64-osx
-          vcpkg integrate install
+        #  vcpkg update
+        #  vcpkg install ffmpeg:x64-osx
+        #  vcpkg integrate install
 
       - name: Dependencies-windows
         if: matrix.os == 'windows-latest'
         run: |
           vcpkg update
-          vcpkg install ffmpeg:x64-windows
+          vcpkg install ffmpeg:x64-windows-static
           vcpkg integrate install
 
       # Runs a set of commands using the runners shell
