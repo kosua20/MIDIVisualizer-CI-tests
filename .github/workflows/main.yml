@@ -14,7 +14,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest, macOS-latest]
+        os: [macOS-latest] # [windows-latest, ubuntu-latest, macOS-latest]
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -36,9 +36,9 @@ jobs:
         if: matrix.os == 'macOS-latest'
         run: |
           brew install yasm
-        #  vcpkg update
-        #  vcpkg install ffmpeg:x64-osx
-        #  vcpkg integrate install
+          vcpkg update
+          vcpkg install ffmpeg:x64-osx
+          vcpkg integrate install
 
       - name: Dependencies-windows
         if: matrix.os == 'windows-latest'
