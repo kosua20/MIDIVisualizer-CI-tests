@@ -8,8 +8,8 @@ set(CMAKE_BUILD_TYPE "Release")
 if(MSVC)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 endif()
-# Need to look for local FindFFmpeg.cmake script, as none are provided by default.
-#list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/libs")
+# Need to look for local FindFFMPEG.cmake script, as none are provided by default.
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/libs/")
 
 
 ## Dependencies
@@ -28,10 +28,7 @@ add_subdirectory(libs/nfd/)
 find_package(OpenGL REQUIRED)
 
 # Add FFMPEG if available
-find_package(FFmpeg COMPONENTS AVCODEC AVFORMAT AVUTIL SWSCALE)
-if(FFMPEG_FOUND)
-	find_package(ZLIB REQUIRED)
-endif()
+find_package(FFMPEG)
 
 ## Projects
 
@@ -140,8 +137,8 @@ add_dependencies(MIDIVisualizer Packaging)
 if(FFMPEG_FOUND)
 	message(STATUS "FFmpeg found, enabling video export.")
 	target_compile_definitions(MIDIVisualizer PRIVATE MIDIVIZ_SUPPORT_VIDEO)
-	target_include_directories(MIDIVisualizer PRIVATE ${FFMPEG_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})
-	target_link_libraries(MIDIVisualizer PRIVATE ${FFMPEG_LIBRARIES} ${ZLIB_LIBRARIES})
+	target_include_directories(MIDIVisualizer PRIVATE ${FFMPEG_INCLUDE_DIRS})
+	target_link_libraries(MIDIVisualizer PRIVATE ${FFMPEG_LIBRARIES})
 	message("Libs: ${FFMPEG_LIBRARIES}")
 	target_compile_definitions(MIDIVisualizer PRIVATE ${FFMPEG_DEFINITIONS})
 endif()

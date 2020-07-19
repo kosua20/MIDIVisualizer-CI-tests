@@ -34,11 +34,13 @@ jobs:
 
       - name: Dependencies-macos
         if: matrix.os == 'macOS-latest'
+        shell: bash
         run: |
-          brew install yasm
-          vcpkg update
-          vcpkg install ffmpeg:x64-osx
-          vcpkg integrate install
+          cd $GITHUB_WORKSPACE
+          curl -o ffmpeg.zip https://github.com/kosua20/MIDIVisualizer-CI-tests/releases/download/dependencies/ffmpeg-osx-64-static-lgpl.zip
+          unzip ffmpeg.zip
+          rm ffmpeg.zip
+          cp ffmpeg/FindFFMPEG.cmake ./
 
       - name: Dependencies-windows
         if: matrix.os == 'windows-latest'
