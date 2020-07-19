@@ -16,14 +16,14 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            cmake-opts: 
-            artifact_name: build/MIDIVisualizer
-            asset_name: MIDIVisualizer-ubuntu.zip
-          - os: windows-latest
-            cmake-opts: -A x64
-            artifact_name: build/x64/Release/MIDIVisualizer.exe
-            asset_name: MIDIVisualizer-windows-64.zip
+          #- os: ubuntu-latest
+          #  cmake-opts: 
+          #  artifact_name: build/MIDIVisualizer
+          #  asset_name: MIDIVisualizer-ubuntu.zip
+          #- os: windows-latest
+          #  cmake-opts: -A x64
+          #  artifact_name: build/x64/Release/MIDIVisualizer.exe
+          #  asset_name: MIDIVisualizer-windows-64.zip
           - os: macOS-latest
             cmake-opts:
             artifact_name: build/MIDIVisualizer
