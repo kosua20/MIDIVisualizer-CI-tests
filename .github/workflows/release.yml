@@ -1,17 +1,12 @@
-name: CI
+name: Generate release
 
-# Controls when the action will run. Triggers the workflow on push only for the master branch
 on:
   release:
     types: 
       - published
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
-    runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
@@ -20,53 +15,43 @@ jobs:
           #  cmake-opts: 
           #  artifact_name: build/MIDIVisualizer
           #  asset_name: MIDIVisualizer-ubuntu.zip
+          #  ffmpeg-archive: ffmpeg-ubuntu-64-static-lgpl.zip
           #- os: windows-latest
           #  cmake-opts: -A x64
           #  artifact_name: build/x64/Release/MIDIVisualizer.exe
-          #  asset_name: MIDIVisualizer-windows-64.zip
+          #  asset_name: MIDIVisualizer-windows-64bits.zip
+          #  ffmpeg-archive: ffmpeg-windows-64-static-lgpl.zip
           - os: macOS-latest
             cmake-opts:
             artifact_name: build/MIDIVisualizer
             asset_name: MIDIVisualizer-macos.zip
-       
+            ffmpeg-archive: ffmpeg-osx-64-static-lgpl.zip
+    
+    runs-on: ${{ matrix.os }}
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
-
-      - name: Create dir
-        run: cmake -E make_directory ${{runner.workspace}}/build
 
       - name: Dependencies-ubuntu
         if: matrix.os == 'ubuntu-latest'
         shell: bash
-        run: |
-          sudo apt-get update -y && sudo apt-get install -yq xorg-dev libgtk-3-dev yasm
-          cd $GITHUB_WORKSPACE/libs
-          wget -O ffmpeg.zip http://github.com/kosua20/MIDIVisualizer-CI-tests/releases/download/dependencies/ffmpeg-osx-64-static-lgpl.zip
-          unzip ffmpeg.zip
-          rm ffmpeg.zip
-          cp ffmpeg/FindFFMPEG.cmake ./
+        run: sudo apt-get update -y && sudo apt-get install -yq xorg-dev libgtk-3-dev
 
       - name: Dependencies-macos
         if: matrix.os == 'macOS-latest'
         shell: bash
-        run: |
-          brew install wget
-          cd $GITHUB_WORKSPACE/libs
-          wget -O ffmpeg.zip http://github.com/kosua20/MIDIVisualizer-CI-tests/releases/download/dependencies/ffmpeg-osx-64-static-lgpl.zip
-          unzip ffmpeg.zip
-          rm ffmpeg.zip
-          cp ffmpeg/FindFFMPEG.cmake ./
+        run: brew install wget
 
       - name: Dependencies-windows
         if: matrix.os == 'windows-latest'
         shell: bash
+        run: choco install wget unzip
+
+      - name: FFMPEG support
+        shell: bash
         run: |
-          choco install wget unzip
           cd $GITHUB_WORKSPACE/libs
-          wget -O ffmpeg.zip http://github.com/kosua20/MIDIVisualizer-CI-tests/releases/download/dependencies/ffmpeg-osx-64-static-lgpl.zip
+          wget -O ffmpeg.zip http://github.com/kosua20/MIDIVisualizer-CI-tests/releases/download/dependencies/${{matrix.ffmpeg-archive}}
           unzip ffmpeg.zip
           rm ffmpeg.zip
           cp ffmpeg/FindFFMPEG.cmake ./
@@ -74,7 +59,9 @@ jobs:
       - name: Configure
         shell: bash
         working-directory: ${{runner.workspace}}
-        run: cmake -S $GITHUB_WORKSPACE -B build/ -DCMAKE_BUILD_TYPE=Release ${{matrix.cmake-opts}}
+        run: |
+          mkdir ${{runner.workspace}}/build
+          cmake -S $GITHUB_WORKSPACE -B build/ -DCMAKE_BUILD_TYPE=Release ${{matrix.cmake-opts}}
 
       - name: Build
         working-directory: ${{runner.workspace}}
