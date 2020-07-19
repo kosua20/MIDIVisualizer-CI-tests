@@ -60,7 +60,7 @@ jobs:
         shell: bash
         working-directory: ${{runner.workspace}}
         run: |
-          mkdir ${{runner.workspace}}/build
+          cmake -E make_directory ${{runner.workspace}}/build
           cmake -S $GITHUB_WORKSPACE -B build/ -DCMAKE_BUILD_TYPE=Release ${{matrix.cmake-opts}}
 
       - name: Build
