@@ -45,7 +45,7 @@ jobs:
       - name: Dependencies-windows
         if: startsWith(matrix.os, 'windows')
         shell: bash
-        run: choco install wget unzip
+        run: choco install wget unzip zip
 
       - name: Dependencies
         shell: bash
