@@ -71,7 +71,7 @@ jobs:
       - name: Package
         working-directory: ${{runner.workspace}}
         shell: bash
-        run: zip release.zip ${{matrix.artifact_name}}
+        run: zip -j release.zip ${{matrix.artifact_name}}
 
       - name: Upload
         uses: actions/upload-release-asset@v1.0.1
