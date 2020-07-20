@@ -11,16 +11,16 @@ jobs:
     strategy:
       matrix:
         include:
-          #- os: ubuntu-latest
-          #  cmake-opts: 
-          #  artifact_name: build/MIDIVisualizer
-          #  asset_name: MIDIVisualizer-ubuntu.zip
-          #  ffmpeg-archive: ffmpeg-ubuntu-64-static-lgpl.zip
-          #- os: windows-latest
-          #  cmake-opts: -A x64
-          #  artifact_name: build/x64/Release/MIDIVisualizer.exe
-          #  asset_name: MIDIVisualizer-windows-64bits.zip
-          #  ffmpeg-archive: ffmpeg-windows-64-static-lgpl.zip
+          - os: ubuntu-latest
+            cmake-opts: 
+            artifact_name: build/MIDIVisualizer
+            asset_name: MIDIVisualizer-ubuntu.zip
+            ffmpeg-archive: ffmpeg-linux-64-static-lgpl.zip
+          - os: windows-latest
+            cmake-opts: -A x64
+            artifact_name: build/x64/Release/MIDIVisualizer.exe
+            asset_name: MIDIVisualizer-windows-64bits.zip
+            ffmpeg-archive: ffmpeg-windows-64-static-lgpl.zip
           - os: macOS-latest
             cmake-opts:
             artifact_name: build/MIDIVisualizer
@@ -47,14 +47,14 @@ jobs:
         shell: bash
         run: choco install wget unzip
 
-      - name: FFMPEG support
+      - name: Dependencies
         shell: bash
         run: |
           cd $GITHUB_WORKSPACE/libs
-          wget -O ffmpeg.zip http://github.com/kosua20/MIDIVisualizer-CI-tests/releases/download/dependencies/${{matrix.ffmpeg-archive}}
+          wget -O ffmpeg.zip https://github.com/kosua20/MIDIVisualizer-dependencies/releases/latest/download/${{matrix.ffmpeg-archive}}
           unzip ffmpeg.zip
           rm ffmpeg.zip
-          cp ffmpeg/FindFFMPEG.cmake ./
+          cp ffmpeg/share/ffmpeg/FindFFMPEG.cmake ./
 
       - name: Configure
         shell: bash
