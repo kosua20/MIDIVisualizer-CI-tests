@@ -18,7 +18,7 @@ jobs:
           #  ffmpeg-archive: ffmpeg-linux-64-static-lgpl.zip
           - os: windows-latest
             cmake-opts: -A x64
-            artifact_name: build/x64/Release/MIDIVisualizer.exe
+            artifact_name: build/Release/MIDIVisualizer.exe
             asset_name: MIDIVisualizer-windows-64bits.zip
             ffmpeg-archive: ffmpeg-windows-64-static-lgpl.zip
           - os: macOS-latest
