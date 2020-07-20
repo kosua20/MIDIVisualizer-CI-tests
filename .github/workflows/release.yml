@@ -11,11 +11,11 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            cmake-opts: -D CMAKE_C_COMPILER=gcc-9 -D CMAKE_CXX_COMPILER=g++-9
-            artifact_name: build/MIDIVisualizer
-            asset_name: MIDIVisualizer-ubuntu.zip
-            ffmpeg-archive: ffmpeg-linux-64-static-lgpl.zip
+          #- os: ubuntu-latest
+          #  cmake-opts: -D CMAKE_C_COMPILER=gcc-9 -D CMAKE_CXX_COMPILER=g++-9
+          #  artifact_name: build/MIDIVisualizer
+          #  asset_name: MIDIVisualizer-ubuntu.zip
+          #  ffmpeg-archive: ffmpeg-linux-64-static-lgpl.zip
           - os: windows-latest
             cmake-opts: -A x64
             artifact_name: build/x64/Release/MIDIVisualizer.exe
