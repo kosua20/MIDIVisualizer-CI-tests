@@ -11,11 +11,11 @@ jobs:
     strategy:
       matrix:
         include:
-          #- os: ubuntu-latest
-          #  cmake-opts: -D CMAKE_C_COMPILER=gcc-9 -D CMAKE_CXX_COMPILER=g++-9
-          #  artifact_name: build/MIDIVisualizer
-          #  asset_name: MIDIVisualizer-ubuntu.zip
-          #  ffmpeg-archive: ffmpeg-linux-64-static-lgpl.zip
+          - os: ubuntu-20.04
+            cmake-opts: -D CMAKE_C_COMPILER=gcc-9 -D CMAKE_CXX_COMPILER=g++-9
+            artifact_name: build/MIDIVisualizer
+            asset_name: MIDIVisualizer-ubuntu.zip
+            ffmpeg-archive: ffmpeg-linux-64-static-lgpl.zip
           - os: windows-latest
             cmake-opts: -A x64
             artifact_name: build/Release/MIDIVisualizer.exe
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Dependencies-ubuntu
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-20.04'
         shell: bash
         run: sudo apt-get update -y && sudo apt-get install -yq xorg-dev libgtk-3-dev
 
