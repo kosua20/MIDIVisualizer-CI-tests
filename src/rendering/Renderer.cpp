@@ -13,14 +13,18 @@
 #include <fstream>
 
 
-Renderer::Renderer() {
+
+SystemAction::SystemAction(SystemAction::Type act) {
+	type = act;
+	data = glm::ivec4(0);
 }
 
-Renderer::~Renderer() {}
-
-void Renderer::init(int width, int height) {
+Renderer::Renderer(int winW, int winH, bool fullscreen) {
 	_showGUI = true;
 	_showDebug = false;
+
+	_fullscreen = fullscreen;
+	_windowSize = glm::ivec2(winW, winH);
 
 	// GL options
 	glEnable(GL_CULL_FACE);
@@ -32,19 +36,16 @@ void Renderer::init(int width, int height) {
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	// Setup projection matrix.
-	_camera.screen(width, height);
 
-	// Setup framebuffers.
-	_particlesFramebuffer = std::shared_ptr<Framebuffer>(
-		new Framebuffer(int(_camera._screenSize[0]), int(_camera._screenSize[1]), GL_RGBA,
-			GL_UNSIGNED_BYTE, GL_LINEAR, GL_CLAMP_TO_EDGE));
-	_blurFramebuffer = std::shared_ptr<Framebuffer>(
-		new Framebuffer(int(_camera._screenSize[0]), int(_camera._screenSize[1]), GL_RGBA,
-			GL_UNSIGNED_BYTE, GL_LINEAR, GL_CLAMP_TO_EDGE));
-	_finalFramebuffer = std::shared_ptr<Framebuffer>(
-		new Framebuffer(int(_camera._screenSize[0]), int(_camera._screenSize[1]), GL_RGBA,
-			GL_UNSIGNED_BYTE, GL_LINEAR, GL_CLAMP_TO_EDGE));
+	_camera.screen(winW, winH, 1.0f);
+	// Setup framebuffers, size does not really matter as we expect.
+	const glm::ivec2 renderSize = _camera.renderSize();
+	_particlesFramebuffer = std::shared_ptr<Framebuffer>(new Framebuffer(renderSize[0], renderSize[1],
+		GL_RGBA, GL_UNSIGNED_BYTE, GL_LINEAR, GL_CLAMP_TO_EDGE));
+	_blurFramebuffer = std::shared_ptr<Framebuffer>(new Framebuffer(renderSize[0], renderSize[1],
+		GL_RGBA, GL_UNSIGNED_BYTE, GL_LINEAR, GL_CLAMP_TO_EDGE));
+	_finalFramebuffer = std::shared_ptr<Framebuffer>(new Framebuffer(renderSize[0], renderSize[1],
+		GL_RGBA, GL_UNSIGNED_BYTE, GL_LINEAR, GL_CLAMP_TO_EDGE));
 
 	_backgroundTexture.init("backgroundtexture_frag", "backgroundtexture_vert");
 	_blurringScreen.init(_particlesFramebuffer->textureId(), "particlesblur_frag");
@@ -94,18 +95,31 @@ void Renderer::init(int width, int height) {
 
 	// Check setup errors.
 	checkGLError();
+
+	_score.reset(new Score(2.0f));
+	_scene.reset(new MIDIScene());
 }
 
-void Renderer::loadFile(const std::string &midiFilePath) {
+Renderer::~Renderer() {}
+
+bool Renderer::loadFile(const std::string &midiFilePath) {
+	std::shared_ptr<MIDIScene> scene(nullptr);
+	
+	try {
+		scene = std::make_shared<MIDIScene>(midiFilePath);
+	} catch(...){
+		// Failed to load.
+		return false;
+	}
 	// Player.
 	_timer = -_state.prerollTime;
 	_shouldPlay = false;
 
 	// Init objects.
-	_scene = std::make_shared<MIDIScene>(midiFilePath);
+	_scene = scene;
 	_score = std::make_shared<Score>(_scene->midiFile().tracks[0].secondsPerMeasure);
-
 	applyAllSettings();
+	return true;
 }
 
 SystemAction Renderer::draw(float currentTime) {
@@ -128,9 +142,10 @@ SystemAction Renderer::draw(float currentTime) {
 			_timer = 0.0f;
 			_timerStart = 0.0f;
 			_shouldPlay = false;
+			updateSizes();
 		}
 		// Make sure the backbuffer is updated, this is nicer.
-		glViewport(0, 0, GLsizei(_camera._screenSize[0]), GLsizei(_camera._screenSize[1]));
+		glViewport(0, 0, GLsizei(_camera.screenSize()[0]), GLsizei(_camera.screenSize()[1]));
 		_passthrough.draw(_finalFramebuffer->textureId(), _timer);
 		return action;
 	}
@@ -144,7 +159,7 @@ SystemAction Renderer::draw(float currentTime) {
 	// Render scene and blit, with GUI on top if needed.
 	drawScene(false);
 
-	glViewport(0, 0, GLsizei(_camera._screenSize[0]), GLsizei(_camera._screenSize[1]));
+	glViewport(0, 0, GLsizei(_camera.screenSize()[0]), GLsizei(_camera.screenSize()[1]));
 	_passthrough.draw(_finalFramebuffer->textureId(), _timer);
 
 	SystemAction action = SystemAction::NONE;
@@ -283,8 +298,26 @@ SystemAction Renderer::drawGUI(const float currentTime) {
 			_showGUI = false;
 		}
 		ImGui::SameLine();
-		if(ImGui::Button("Fullscreen")){
-			action = SystemAction::FULLSCREEN;
+		if(ImGui::Button("Display")){
+			ImGui::OpenPopup("Display options");
+
+		}
+		if(ImGui::BeginPopup("Display options")){
+			if(ImGui::Checkbox("Fullscreen", &_fullscreen)){
+				action = SystemAction::FULLSCREEN;
+			}
+			if(!_fullscreen){
+				ImGui::PushItemWidth(100);
+				ImGui::InputInt2("Window size", &_windowSize[0]);
+				ImGui::PopItemWidth();
+				ImGui::SameLine();
+				if(ImGui::Button("Resize")){
+					action = SystemAction::RESIZE;
+					action.data[0] = _windowSize[0];
+					action.data[1] = _windowSize[1];
+				}
+			}
+			ImGui::EndPopup();
 		}
 
 		ImGui::SameLine(340);
@@ -324,7 +357,7 @@ SystemAction Renderer::drawGUI(const float currentTime) {
 		ImGui::SameLine(COLUMN_SIZE);
 		ImGui::PushItemWidth(100);
 		if (ImGui::Combo("Quality", (int *)(&_state.quality), "Half\0Low\0Medium\0High\0Double\0\0")) {
-			resize(int(_camera._screenSize[0]), int(_camera._screenSize[1]));
+			updateSizes();
 		}
 
 		const bool smw0 = ImGui::InputFloat("Scale", &_state.scale, 0.01f, 0.1f);
@@ -583,7 +616,7 @@ SystemAction Renderer::drawGUI(const float currentTime) {
 			ImGui::SameLine();
 			ImGui::TextDisabled("(press D to hide)");
 			ImGui::Text("%.1f FPS / %.1f ms", ImGui::GetIO().Framerate, ImGui::GetIO().DeltaTime * 1000.0f);
-			ImGui::Text("Final framebuffer size: %dx%d, screen size: %dx%d", _finalFramebuffer->_width, _finalFramebuffer->_height, int(_camera._screenSize[0]), int(_camera._screenSize[1]));
+			ImGui::Text("Final framebuffer size: %dx%d, screen size: %dx%d", _finalFramebuffer->_width, _finalFramebuffer->_height, _camera.screenSize()[0], _camera.screenSize()[1]);
 			if (ImGui::Button("Print MIDI content to console")) {
 				_scene->midiFile().printTracks();
 			}
@@ -672,7 +705,7 @@ void Renderer::applyAllSettings() {
 	glUseProgram(0);
 
 	// Resize the framebuffers.
-	resize(int(_camera._screenSize[0]), int(_camera._screenSize[1]));
+	updateSizes();
 
 	// Finally, restore the track at the beginning.
 	reset();
@@ -692,15 +725,27 @@ void Renderer::clean() {
 	_finalFramebuffer->clean();
 }
 
-void Renderer::resize(int width, int height) {
+void Renderer::rescale(float scale){
+	resizeAndRescale(_camera.screenSize()[0], _camera.screenSize()[1], scale);
+}
 
+void Renderer::resize(int width, int height) {
+	resizeAndRescale(width, height, _camera.scale());
+}
+
+void Renderer::resizeAndRescale(int width, int height, float scale) {
 	// Update the projection matrix.
-	_camera.screen(width, height);
+	_camera.screen(width, height, scale);
+	updateSizes();
+}
+
+void Renderer::updateSizes(){
 	// Resize the framebuffers.
 	const auto &currentQuality = Quality::availables.at(_state.quality);
-	_particlesFramebuffer->resize(currentQuality.particlesResolution * _camera._screenSize);
-	_blurFramebuffer->resize(currentQuality.blurResolution * _camera._screenSize);
-	_finalFramebuffer->resize(currentQuality.finalResolution * _camera._screenSize);
+	const glm::vec2 baseRes(_camera.renderSize());
+	_particlesFramebuffer->resize(currentQuality.particlesResolution * baseRes);
+	_blurFramebuffer->resize(currentQuality.blurResolution * baseRes);
+	_finalFramebuffer->resize(currentQuality.finalResolution * baseRes);
 	_recorder.setSize(glm::ivec2(_finalFramebuffer->_width, _finalFramebuffer->_height));
 }
 
@@ -753,14 +798,28 @@ void Renderer::startDirectRecording(const std::string & path, Recorder::Format f
 
 void Renderer::startRecording(){
 	// We need to provide some information for the recorder to start.
-	_recorder.start(_state.prerollTime, _scene->duration());
-	const glm::vec2 backSize = _camera._screenSize;
+	_recorder.start(_state.prerollTime, float(_scene->duration()));
+
 	// Start by clearing up all buffers.
+	// We need:
+	// - the rendering res (taking into account quality and screen scaling) to be equal to requiredSize().
+	// - the camera screen size and scale to remain the same afterwards (and during for a nice background display).
+	// We can do this by leveraging the fact that camera parameters are not used during render.
+	// We can thus:
+	// - backup the camera parameters
+	// - trigger a buffers size update at the target resolution
+	// - restore thecamera parameters.
+	// All that will be left is to trigger a size update at the end of the recording.
+
+	const glm::ivec2 backSize = _camera.screenSize();
+	const float backScale = _camera.scale();
+
 	const auto &currentQuality = Quality::availables.at(_state.quality);
 	const glm::vec2 finalSize = glm::vec2(_recorder.requiredSize()) / currentQuality.finalResolution;
-	resize(int(finalSize[0]), int(finalSize[1]));
-	// To get a nice background display of the result, we need to restore the camera screen size for the final viewport.
-	_camera.screen(int(backSize[0]), int(backSize[1]));
+	resizeAndRescale(int(finalSize[0]), int(finalSize[1]), 1.0f);
+
+	_camera.screen(backSize[0], backSize[1], backScale);
+
 	// Reset buffers.
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	_particlesFramebuffer->bind();

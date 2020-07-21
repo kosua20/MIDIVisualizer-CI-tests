@@ -18,22 +18,27 @@
 
 #define DEBUG_SPEED (1.0f)
 
-enum class SystemAction {
-	NONE, FIX_SIZE, FREE_SIZE, FULLSCREEN, QUIT
+struct SystemAction {
+	enum Type {
+		NONE, FIX_SIZE, FREE_SIZE, FULLSCREEN, QUIT, RESIZE
+	};
+
+	Type type;
+	glm::ivec4 data;
+
+	SystemAction(Type action);
 };
+
 
 class Renderer {
 
 public:
 
-	Renderer();
+	Renderer(int winW, int winH, bool fullscreen);
 
 	~Renderer();
 	
-	/// Init function
-	void init(int width, int height);
-	
-	void loadFile(const std::string & midiFilePath);
+	bool loadFile(const std::string & midiFilePath);
 
 	void setState(const State & state);
 	
@@ -45,6 +50,11 @@ public:
 
 	/// Handle screen resizing
 	void resize(int width, int height);
+
+	/// Handle window content density.
+	void rescale(float scale);
+
+	void resizeAndRescale(int width, int height, float scale);
 
 	/// Handle keyboard inputs
 	void keyPressed(int key, int action);
@@ -96,6 +106,8 @@ private:
 
 	void startRecording();
 
+	void updateSizes();
+
 	State _state;
 	std::array<Layer, 8> _layers;
 
@@ -119,8 +131,11 @@ private:
 	ScreenQuad _passthrough;
 	ScreenQuad _backgroundTexture;
 	std::shared_ptr<Score> _score;
+
+	glm::ivec2 _windowSize;
 	bool _showLayers = false;
 	bool _exitAfterRecording = false;
+	bool _fullscreen = false;
 };
 
 #endif

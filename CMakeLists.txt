@@ -4,12 +4,11 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.12" CACHE STRING "Minimum OS X deployment ve
 project(MIDIVisualizer)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_BUILD_TYPE "Release")
-
 if(MSVC)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 endif()
 # Need to look for local FindFFMPEG.cmake script, as none are provided by default.
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/libs/")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/libs")
 
 
 ## Dependencies
@@ -139,6 +138,10 @@ if(FFMPEG_FOUND)
 	target_compile_definitions(MIDIVisualizer PRIVATE MIDIVIZ_SUPPORT_VIDEO)
 	target_include_directories(MIDIVisualizer PRIVATE ${FFMPEG_INCLUDE_DIRS})
 	target_link_libraries(MIDIVisualizer PRIVATE ${FFMPEG_LIBRARIES})
-	message("Libs: ${FFMPEG_LIBRARIES}")
 	target_compile_definitions(MIDIVisualizer PRIVATE ${FFMPEG_DEFINITIONS})
+endif()
+
+# On Windows, the icon is directly included in the executable.
+if(WIN32)
+	target_sources(MIDIVisualizer PRIVATE resources/icon/MIDIVisualizer.rc)
 endif()

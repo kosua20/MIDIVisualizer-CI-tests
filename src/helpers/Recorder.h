@@ -33,7 +33,7 @@ public:
 
 	void start(float preroll, float duration);
 
-	bool drawProgress();
+	void drawProgress();
 	
 	bool isRecording() const;
 

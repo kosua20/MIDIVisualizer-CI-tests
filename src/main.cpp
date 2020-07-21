@@ -25,6 +25,7 @@ void printHelp(){
 		{"midi", "path to a MIDI file to load"},
 		{"config", "path to a configuration INI file"},
 		{"size", "dimensions of the window (--size W H)"},
+		{"fullscreen", "start in fullscreen (1 or 0 to enabled/disable)"},
 	};
 
 	const std::vector<std::pair<std::string, std::string>> expOpts = {
@@ -61,6 +62,12 @@ void resize_callback(GLFWwindow* window, int width, int height){
 	renderer->resize(width, height);
 }
 
+void rescale_callback(GLFWwindow* window, float xscale, float yscale){
+	Renderer *renderer = static_cast<Renderer*>(glfwGetWindowUserPointer(window));
+	// Assume only one of the two for now.
+	renderer->rescale(xscale);
+}
+
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods){
 	
 	// Handle quitting
@@ -83,7 +90,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset){
 /// Perform system window action.
 
 void performAction(SystemAction action, GLFWwindow * window, glm::ivec4 & frame){
-	switch (action) {
+	switch (action.type) {
 		case SystemAction::FULLSCREEN: {
 			// Are we currently fullscreen?
 			const bool fullscreen = glfwGetWindowMonitor(window) != nullptr;
@@ -107,6 +114,12 @@ void performAction(SystemAction action, GLFWwindow * window, glm::ivec4 & frame)
 			glfwSwapInterval(1);
 			break;
 		}
+		case SystemAction::RESIZE:
+			glfwSetWindowSize(window, action.data[0], action.data[1]);
+			// Check the window position and size (if we are on a screen smaller than the target size).
+			glfwGetWindowPos(window, &frame[0], &frame[1]);
+			glfwGetWindowSize(window, &frame[2], &frame[3]);
+			break;
 		case SystemAction::FIX_SIZE:
 			glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_FALSE);
 			break;
@@ -154,6 +167,13 @@ int main( int argc, char** argv) {
 			ish = Configuration::parseInt(vals[1]);
 		}
 	}
+
+	// Fullscreen at launch.
+	bool fullscreen = false;
+	if(args.count("fullscreen") > 0 && Configuration::parseBool(args["fullscreen"][0])){
+		fullscreen = true;
+	}
+
 	// Hide window if needed.
 	if(args.count("hide-window") > 0 && Configuration::parseBool(args["hide-window"][0])){
 		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -199,16 +219,13 @@ int main( int argc, char** argv) {
 	// Setup resources.
 	ResourcesManager::loadResources();
 	// Create the renderer.
-	Renderer renderer;
-	renderer.init(isw, ish);
+	Renderer renderer(isw, ish, fullscreen);
 
-	try {
-		// Load midi file, graphics setup.
-		renderer.loadFile(midiFilePath);
-	} catch (...) {
+	// Load midi file, graphics setup.
+	if(!renderer.loadFile(midiFilePath)){
 		// File not found, probably (error message handled locally).
-		glfwDestroyWindow(window);
 		renderer.clean();
+		glfwDestroyWindow(window);
 		glfwTerminate();
 		return 3;
 	}
@@ -229,11 +246,14 @@ int main( int argc, char** argv) {
 	glfwSetKeyCallback(window,key_callback);					// Pressing a key
 	glfwSetScrollCallback(window,scroll_callback);				// Scrolling
 	glfwSetCharCallback(window, ImGui_ImplGlfw_CharCallback);
+	glfwSetWindowContentScaleCallback(window, rescale_callback);
 	glfwSwapInterval(1);
 	// On HiDPI screens, we might have to initially resize the framebuffers size.
 	int width, height;
 	glfwGetFramebufferSize(window, &width, &height);
-	renderer.resize(width, height);
+	glm::vec2 scale(1.0f);
+	glfwGetWindowContentScale(window, &scale[0], &scale[1]);
+	renderer.resizeAndRescale(width, height, scale[0]);
 	
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -244,7 +264,7 @@ int main( int argc, char** argv) {
 	ImGui_ImplGlfw_InitForOpenGL(window, false);
 	ImGui_ImplOpenGL3_Init("#version 330");
 
-	glm::ivec4 frame(0.0f);
+	glm::ivec4 frame(0);
 	glfwGetWindowPos(window, &frame[0], &frame[1]);
 	glfwGetWindowSize(window, &frame[2], &frame[3]);
 
@@ -264,6 +284,10 @@ int main( int argc, char** argv) {
 			}
 		}
 		renderer.startDirectRecording(exportPath, format, framerate, bitrate, pngAlpha, glm::vec2(isw, ish));
+	}
+
+	if(fullscreen){
+		performAction(SystemAction::FULLSCREEN, window, frame);
 	}
 
 	// Start the display/interaction loop.
@@ -292,10 +316,10 @@ int main( int argc, char** argv) {
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
+	renderer.clean();
 	// Remove the window.
 	glfwDestroyWindow(window);
 	// Clean other resources
-	renderer.clean();
 	// Close GL context and any other GLFW resources.
 	glfwTerminate();
 	return 0;
