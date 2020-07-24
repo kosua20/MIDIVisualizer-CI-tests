@@ -98,6 +98,8 @@ set(Sources
 	"src/midi/MIDITrack.h"
 	"src/midi/MIDIUtils.cpp"
 	"src/midi/MIDIUtils.h"
+	"src/midi/MIDIBase.cpp"
+	"src/midi/MIDIBase.h"
 	"src/rendering/Score.cpp"
 	"src/rendering/Score.h"
 	"src/rendering/Framebuffer.cpp"
@@ -144,4 +146,10 @@ endif()
 # On Windows, the icon is directly included in the executable.
 if(WIN32)
 	target_sources(MIDIVisualizer PRIVATE resources/icon/MIDIVisualizer.rc)
+endif()
+
+if(APPLE)
+	target_sources(MIDIVisualizer PRIVATE resources/icon/MIDIVisualizer.icns)
+	set_target_properties(MIDIVisualizer PROPERTIES MACOSX_BUNDLE TRUE)
+	set_source_files_properties(resources/icon/MIDIVisualizer.icns PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 endif()
