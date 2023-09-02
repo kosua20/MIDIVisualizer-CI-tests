@@ -11,20 +11,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-20.04
-            target: x64
-            cmake-opts: 
-          - os: windows-2019
-            target: x64
-            cmake-opts: -A x64
+        #  - os: ubuntu-20.04
+        #    target: x64
+        #    fullos: ["", "x64"]
+        #    cmake-opts: 
+        #  - os: windows-2019
+        #    target: x64
+        #    fullos: ["", "x64"]
+        #    cmake-opts: -A x64
           - os: macos-11
             target: x64
+            fullos: ["macos-11", "x64"]
             cmake-opts:
           - os: macos-11
+            fullos: ["macos-11", "ARM64"]
             target: ARM64
             cmake-opts:
     
-    runs-on: ${{ matrix.os, matrix.target }}
+    runs-on: ${{ matrix.fullos }}
     
     steps:
       - uses: actions/checkout@v3
