@@ -24,7 +24,7 @@ jobs:
             target: ARM64
             cmake-opts:
     
-    runs-on: [${{ matrix.os }}, ${{ matrix.target }}]
+    runs-on: ${{ matrix.os, matrix.target }}
     
     steps:
       - uses: actions/checkout@v3
