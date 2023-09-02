@@ -15,21 +15,21 @@ jobs:
             target: x64
             cmake-opts: -D CMAKE_C_COMPILER=gcc-9 -D CMAKE_CXX_COMPILER=g++-9
             artifact_name: build/MIDIVisualizer
-            asset_name: MIDIVisualizer-ubuntu.zip
-            ffmpeg-archive: ffmpeg-linux-64-static-lgpl.zip
-          - os: windows-latest
+            asset_name: MIDIVisualizer-ubuntu20.zip
+            ffmpeg-archive: ffmpeg-ubuntu20-64-static-lgpl.zip
+          - os: windows-2019
             target: x64
             cmake-opts: -A x64
             artifact_name: build/Release/MIDIVisualizer.exe
             asset_name: MIDIVisualizer-windows-64bits.zip
             ffmpeg-archive: ffmpeg-windows-64-static-lgpl.zip
-          - os: macOS-latest
+          - os: macos-11
             target: x64
             cmake-opts: 
             artifact_name: build/MIDIVisualizer.app
             asset_name: MIDIVisualizer-macos.zip
             ffmpeg-archive: ffmpeg-osx-64-static-lgpl.zip
-          - os: macOS-latest
+          - os: macos-11
             target: ARM64
             cmake-opts: 
             artifact_name: build/MIDIVisualizer.app
@@ -39,15 +39,15 @@ jobs:
     runs-on: [${{ matrix.os }}, ${{ matrix.target }}]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Dependencies-ubuntu
         if: startsWith(matrix.os, 'ubuntu')
         shell: bash
-        run: sudo apt-get update -y && sudo apt-get install -yq xorg-dev libgtk-3-dev
+        run: sudo apt-get update -y && sudo apt-get install -yq xorg-dev libgtk-3-dev libasound2-dev libnotify-dev
 
       - name: Dependencies-macos
-        if: startsWith(matrix.os, 'macOS')
+        if: startsWith(matrix.os, 'macos')
         shell: bash
         run: brew install wget
 
@@ -84,7 +84,7 @@ jobs:
         run: sh $GITHUB_WORKSPACE/libs/package-ubuntu.sh ${{runner.workspace}}/${{matrix.artifact_name}} $GITHUB_WORKSPACE ${{runner.workspace}}/release.zip
 
       - name: Package-macos
-        if: startsWith(matrix.os, 'macOS')
+        if: startsWith(matrix.os, 'macos')
         working-directory: ${{runner.workspace}}
         shell: bash
         run: sh $GITHUB_WORKSPACE/libs/package-macos.sh ${{runner.workspace}}/${{matrix.artifact_name}} $GITHUB_WORKSPACE ${{runner.workspace}}/release.zip
