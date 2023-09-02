@@ -1,6 +1,6 @@
 #include "MIDIBase.h"
 
-MIDINote::MIDINote(short aNote, double aStart, double aDuration, short aVelocity, short aChannel) : start(aStart), duration(aDuration), note(aNote), velocity(aVelocity), channel(aChannel) {
+MIDINote::MIDINote(short aNote, double aStart, double aDuration, short aVelocity, short aChannel, unsigned int trackId) : start(aStart), duration(aDuration), track(trackId), set(0), note(aNote), velocity(aVelocity), channel(aChannel) {
 
 }
 
@@ -14,6 +14,10 @@ MIDITempo::MIDITempo(){
 
 MIDITempo::MIDITempo(size_t astart, unsigned int atempo) : start(astart), tempo(atempo) {
 	
+}
+
+MIDIPedal::MIDIPedal(PedalType aType, double aStart, double aDuration, float aVelocity) : start(aStart), duration(aDuration), type(aType), velocity(aVelocity) {
+
 }
 
 void MIDINote::print() const {
@@ -39,6 +43,10 @@ void MIDITempo::print() const {
 	std::cout << "[INFO]: Tempo " << tempo << " (at "<< start << "u, " << timestamp << "us)." << std::endl;
 }
 
+void MIDIPedal::print() const {
+	std::cout << "[INFO]: Pedal " << int(type) << " (at "<< start << "s, " << duration << "s) with velocity " << velocity << "." << std::endl;
+}
+
 MIDIEvent MIDIEvent::readMIDIEvent(const std::vector<char> & buffer, size_t & position, size_t delta, uint8_t & previousFirstByte){
 
 	uint8_t firstByte = read8(buffer, position);
@@ -47,7 +55,6 @@ MIDIEvent MIDIEvent::readMIDIEvent(const std::vector<char> & buffer, size_t & po
 	MIDIEventType type = static_cast<MIDIEventType>((firstByte & 0xF0) >> 4);
 	/*if (type == ignoreType) {
 		position += positionOffset;
-		std::cout << "but" << std::endl;
 		return MIDIEvent(midiEvent, static_cast<uint8_t>(type), delta, {});
 	}*/
 

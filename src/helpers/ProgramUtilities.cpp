@@ -1,4 +1,6 @@
 #include "ProgramUtilities.h"
+#include "../helpers/System.h"
+#include "ResourcesManager.h"
 
 #include <iostream>
 #include <fstream>
@@ -41,30 +43,95 @@ std::string getGLErrorString(GLenum error) {
 int _checkGLError(const char *file, int line){
 	GLenum glErr = glGetError();
 	if (glErr != GL_NO_ERROR){
-		std::cerr << "glError in " << file << " (" << line << ") : " << getGLErrorString(glErr) << std::endl;
+		std::cerr << "[GL]: Error in " << file << " (" << line << ") : " << getGLErrorString(glErr) << std::endl;
 		return 1;
 	}
 	return 0;
 }
 
-std::string loadStringFromFile(const std::string & filename) {
-	std::ifstream in;
-	// Open a stream to the file.
-	in.open(filename.c_str());
-	if (!in) {
-		std::cerr << filename + " is not a valid file." << std::endl;
-		return "";
+void ShaderProgram::init(const std::string & vertexName, const std::string & fragmentName){
+	const std::string vertexContent = ResourcesManager::getStringForShader(vertexName);
+	const std::string fragmentContent = ResourcesManager::getStringForShader(fragmentName);
+	_id = createGLProgramFromStrings(vertexContent, fragmentContent);
+	_textures.clear();
+	_uniforms.clear();
+	// Get the number of active uniforms and their maximum length.
+	// Note: this will also capture each attribute of each element of a uniform block (not used in MIDIViz for now)
+	GLint count = 0;
+	GLint size  = 0;
+	glGetProgramiv(_id, GL_ACTIVE_UNIFORMS, &count);
+	glGetProgramiv(_id, GL_ACTIVE_UNIFORM_MAX_LENGTH, &size);
+	glUseProgram(_id);
+
+	for(GLuint i = 0; i < GLuint(count); ++i) {
+		// Get infos (name, name length, type,...) of each uniform.
+		std::vector<GLchar> uname(size);
+		GLenum utype;
+		GLint usize		= 0;
+		GLsizei ulength = 0;
+		glGetActiveUniform(_id, i, size, &ulength, &usize, &utype, &uname[0]);
+		std::string name(&uname[0]);
+		// Skip empty or default uniforms (starting with 'gl_').
+		if(usize == 0 || name.empty() || (name.size() > 3 && name.substr(0, 3) == "gl_")) {
+			continue;
+		}
+		// If the size of the uniform is > 1, we have an array.
+		if(usize > 1) {
+			// Extract the array name from the 'name[0]' string.
+			const std::string subname = name.substr(0, name.find_first_of('['));
+			name = subname;
+		}
+		// Register uniform using its name.
+		// /!\ the uniform location can be different from the uniform ID.
+		const GLint location = glGetUniformLocation(_id, uname.data());
+
+		// Store textures in their separate list.
+		// Ignore more complex texture types for now
+		if(utype == GL_SAMPLER_1D || utype == GL_SAMPLER_2D || utype == GL_SAMPLER_CUBE || utype == GL_SAMPLER_3D
+		   || utype == GL_SAMPLER_1D_ARRAY || utype == GL_SAMPLER_2D_ARRAY || utype == GL_SAMPLER_CUBE_MAP_ARRAY){
+			_textures[name] = location;
+		} else {
+			_uniforms[name] = location;
+		}
+		// Do we need additional info?
 	}
-	std::stringstream buffer;
-	// Read the stream in a buffer.
-	buffer << in.rdbuf();
-	// Create a string based on the content of the buffer.
-	std::string line = buffer.str();
-	in.close();
-	return line;
+	checkGLError();
+
+	// Check we have no uniform blocks.
+	glGetProgramiv(_id, GL_ACTIVE_UNIFORM_BLOCKS, &count);
+	glGetProgramiv(_id, GL_ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH, &size);
+	assert(count == 0);
+
+	int textureSlot = 0;
+	for(auto& texture : _textures){
+		glUniform1i(texture.second, textureSlot);
+		texture.second = textureSlot;
+		++textureSlot;
+	}
+
+	checkGLError();
+	glUseProgram(0);
 }
 
-GLuint loadShader(const std::string & prog, GLuint type){
+void ShaderProgram::use(){
+	glUseProgram(_id);
+}
+
+void ShaderProgram::clean(){
+	glDeleteProgram(_id);
+}
+
+void ShaderProgram::texture(const std::string& name, GLuint texture, GLenum shape){
+	auto tex = _textures.find(name);
+	if(tex == _textures.end())
+		return;
+	
+	const int texSlot = tex->second;
+	glActiveTexture(GL_TEXTURE0 + texSlot);
+	glBindTexture(shape, texture);
+}
+
+GLuint ShaderProgram::loadShader(const std::string & prog, GLuint type){
 	GLuint id;
 	// Create shader object.
 	id = glCreateShader(type);
@@ -99,21 +166,8 @@ GLuint loadShader(const std::string & prog, GLuint type){
 	return id;
 }
 
-GLuint createGLProgram(const std::string & vertexPath, const std::string & fragmentPath, const std::string & geometryPath){
-	
-	std::string vertexCode = loadStringFromFile(vertexPath);
-	std::string fragmentCode = loadStringFromFile(fragmentPath);
-	std::string geometryCode = "";
-	
-	if(!geometryPath.empty()) {
-		geometryCode = loadStringFromFile(geometryPath);
-	}
-	
-	return createGLProgramFromStrings(vertexCode, fragmentCode, geometryCode);
-}
-
-GLuint createGLProgramFromStrings(const std::string & vertexContent, const std::string & fragmentContent, const std::string & geometryContent){
-	GLuint vp(0), fp(0), gp(0), id(0);
+GLuint ShaderProgram::createGLProgramFromStrings(const std::string & vertexContent, const std::string & fragmentContent){
+	GLuint vp(0), fp(0), id(0);
 	id = glCreateProgram();
 	checkGLError();
 	std::string vertexCode = vertexContent;
@@ -129,14 +183,7 @@ GLuint createGLProgramFromStrings(const std::string & vertexContent, const std::
 		fp = loadShader(fragmentCode,GL_FRAGMENT_SHADER);
 		glAttachShader(id,fp);
 	}
-	// If geometry program filepath exists, load it and compile it.
-	std::string geometryCode = geometryContent;
-	if (!geometryCode.empty()) {
-		gp = loadShader(geometryCode,GL_GEOMETRY_SHADER);
-		glAttachShader(id,gp);
-	}
-	
-	
+
 	// Link everything
 	glLinkProgram(id);
 	checkGLError();
@@ -151,7 +198,7 @@ GLuint createGLProgramFromStrings(const std::string & vertexContent, const std::
 		std::vector<char> infoLog((std::max)(infoLogLength, int(1)));
 		glGetProgramInfoLog(id, infoLogLength, NULL, &infoLog[0]);
 		
-		std::cerr << "Failed loading program: " << &infoLog[0] << std::endl;
+		std::cerr << "[GL]: Failed loading program: " << &infoLog[0] << std::endl;
 		return 0;
 	}
 	// We can now clean the shaders objects, by first detaching them
@@ -161,14 +208,10 @@ GLuint createGLProgramFromStrings(const std::string & vertexContent, const std::
 	if (fp != 0) {
 		glDetachShader(id,fp);
 	}
-	if (gp != 0) {
-		glDetachShader(id,gp);
-	}
 	checkGLError();
 	//And deleting them
 	glDeleteShader(vp);
 	glDeleteShader(fp);
-	glDeleteShader(gp);
 	
 	glUseProgram(id);
 	checkGLError();
@@ -183,7 +226,7 @@ GLuint loadTexture(const std::string& path, unsigned int channels, bool sRGB){
 	stbi_set_flip_vertically_on_load(true);
 	unsigned char * image = stbi_load(path.c_str(), &imwidth, &imheight, &nChans, channels);
 	if(image == NULL){
-		std::cerr << "Unable to load the texture at path " << path << "." << std::endl;
+		std::cerr << "[GL]: Unable to load the texture at path " << path << "." << std::endl;
 		return 0;
 	}
 	stbi_set_flip_vertically_on_load(false);
@@ -203,7 +246,13 @@ GLuint loadTexture( unsigned char* image, unsigned imwidth, unsigned imheight, u
 	glGenerateMipmap(GL_TEXTURE_2D);
 	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-	
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	if(channels == 1){
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_RED);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+	}
 	return textureId;
 }
 
@@ -221,6 +270,7 @@ GLuint loadTextureArray(const std::vector<std::string>& paths, bool sRGB, int & 
 		unsigned char * image = stbi_load(path.c_str(), &size[0], &size[1], &nChans, 1);
 		if (image == NULL) {
 			// Skip non existant file.
+			std::cerr << "[GL]: " << "Unable to load the texture at path " << path << "." << std::endl;
 			continue;
 		}
 		images.push_back(image);
@@ -267,6 +317,70 @@ GLuint loadTextureArray(const std::vector<unsigned char*>& images, const std::ve
 	glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
 	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_R, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	if(channels == 1){
+		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_G, GL_RED);
+		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_B, GL_RED);
+	}
 
 	return textureId;
+}
+
+std::vector<GLuint> generate2DViewsOfArray(GLuint tex, unsigned int maxSize){
+	glBindTexture(GL_TEXTURE_2D_ARRAY, tex);
+	int w, h, l, m, typedFormat;
+	glGetTexLevelParameteriv(GL_TEXTURE_2D_ARRAY, 0, GL_TEXTURE_WIDTH, &w);
+	glGetTexLevelParameteriv(GL_TEXTURE_2D_ARRAY, 0, GL_TEXTURE_HEIGHT, &h);
+	glGetTexLevelParameteriv(GL_TEXTURE_2D_ARRAY, 0, GL_TEXTURE_DEPTH, &l);
+	glGetTexParameteriv(GL_TEXTURE_2D_ARRAY,  GL_TEXTURE_MAX_LEVEL, &m);
+	glGetTexLevelParameteriv(GL_TEXTURE_2D_ARRAY, 0, GL_TEXTURE_INTERNAL_FORMAT, &typedFormat);
+	int r,g,b,a;
+	glGetTexLevelParameteriv(GL_TEXTURE_2D_ARRAY, 0, GL_TEXTURE_RED_TYPE, &r);
+	glGetTexLevelParameteriv(GL_TEXTURE_2D_ARRAY, 0, GL_TEXTURE_GREEN_TYPE, &g);
+	glGetTexLevelParameteriv(GL_TEXTURE_2D_ARRAY, 0, GL_TEXTURE_BLUE_TYPE, &b);
+	glGetTexLevelParameteriv(GL_TEXTURE_2D_ARRAY, 0, GL_TEXTURE_ALPHA_TYPE, &a);
+	int channelCount = (r != GL_NONE) + (g != GL_NONE) + (b != GL_NONE) + (a != GL_NONE);
+	const GLint channelFormats[] = {0, GL_RED, GL_RG, GL_RGB, GL_RGBA};
+
+	std::vector<GLuint> tex2Ds(l);
+	glGenTextures(l, tex2Ds.data());
+
+	for(int i = 0; i < l; ++i){
+		glBindTexture(GL_TEXTURE_2D, tex2Ds[i]);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		if(channelCount == 1){
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_RED);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+		}
+
+		// Allocate.
+		glTexImage2D(GL_TEXTURE_2D, 0, typedFormat, maxSize, maxSize, 0, channelFormats[channelCount], GL_UNSIGNED_BYTE, nullptr);
+
+		// Create two framebuffers.
+		GLuint srcFb, dstFb;
+		glGenFramebuffers(1, &srcFb);
+		glGenFramebuffers(1, &dstFb);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, srcFb);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dstFb);
+
+		glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, tex, 0, i);
+		glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex2Ds[i], 0);
+
+		glBlitFramebuffer(0, 0, w, h, 0, 0, maxSize, maxSize, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+
+		// Restore the proper framebuffers from the cache.
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		glDeleteFramebuffers(1, &srcFb);
+		glDeleteFramebuffers(1, &dstFb);
+
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}
+	return tex2Ds;
 }

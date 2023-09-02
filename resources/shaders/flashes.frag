@@ -1,16 +1,21 @@
 #version 330
+#define SETS_COUNT 12
+
 
 in INTERFACE {
 	vec2 uv;
-	float on;
+	float onChannel;
 	float id;
 } In;
 
 uniform sampler2D textureFlash;
 uniform float time;
-uniform vec3 baseColor;
-
-#define numberSprites 8.0
+uniform vec3 baseColor[SETS_COUNT];
+uniform float haloIntensity;
+uniform float haloInnerRadius;
+uniform float haloOuterRadius;
+uniform int texRowCount;
+uniform int texColCount;
 
 out vec4 fragColor;
 
@@ -23,38 +28,46 @@ float rand(vec2 co){
 void main(){
 	
 	// If not on, discard flash immediatly.
-	if(In.on < 0.5){
-		discard;
-	}
-	
+	int cid = int(In.onChannel);
+
 	float mask = 0.0;
-	
+
+	const float atlasSpeed = 15.0;
+	const float safetyMargin = 0.05;
 	// If up half, read from texture atlas.
 	if(In.uv.y > 0.0){
 		// Select a sprite, depending on time and flash id.
-		float shift = floor(mod(15.0 * time, numberSprites)) + floor(rand(In.id * vec2(time,1.0)));
-		vec2 globalUV = vec2(0.5 * mod(shift, 2.0), 0.25 * floor(shift/2.0));
-		
+		int atlasShift = int(floor(mod(atlasSpeed * time, texRowCount*texColCount)) + floor(rand(In.id * vec2(time,1.0))));
+		ivec2 atlasIndex = ivec2(atlasShift % texColCount, atlasShift / texColCount);
+
 		// Scale UV to fit in one sprite from atlas.
-		vec2 localUV = In.uv * 0.5 + vec2(0.25,-0.25);
-		localUV.y = min(-0.05,localUV.y); //Safety clamp on the upper side (or you could set clamp_t)
+		vec2 localUV = clamp(In.uv * vec2(1.0, 2.0) + vec2(0.5, 0.0), safetyMargin, 1.0-safetyMargin);
 		
 		// Read in black and white texture do determine opacity (mask).
-		vec2 finalUV = globalUV + localUV;
+		vec2 finalUV = (vec2(atlasIndex) + localUV)/vec2(texColCount, texRowCount);
 		mask = texture(textureFlash,finalUV).r;
+	}
+
+	if(cid < 0){
+		discard;
 	}
 	
 	// Colored sprite.
-	vec4 spriteColor = vec4(baseColor,In.on * mask);
+	vec4 spriteColor = vec4(baseColor[cid], mask);
 	
 	// Circular halo effect.
-	float haloAlpha = 1.0 - smoothstep(0.07,0.5,length(In.uv));
-	vec4 haloColor = vec4(1.0,1.0,1.0, In.on * haloAlpha * 0.92);
+
+	float haloAlpha = 1.0 - smoothstep(haloInnerRadius, haloOuterRadius, length(In.uv) / 0.5);
+
+	vec4 haloColor;
+	haloColor.rgb = baseColor[cid] + haloIntensity * vec3(1.0);
+	haloColor.a = haloAlpha * 0.92;
 	
 	// Mix the sprite color and the halo effect.
 	fragColor = mix(spriteColor, haloColor, haloColor.a);
 	
 	// Boost intensity.
 	fragColor *= 1.1;
-	
+	// Premultiplied alpha.
+	fragColor.rgb *= fragColor.a;
 }

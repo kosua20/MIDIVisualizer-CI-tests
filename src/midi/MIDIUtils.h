@@ -2,10 +2,13 @@
 #define MIDI_UTILS_H
 
 #include <cstdint>
-#include <map>
+#include <unordered_map>
 #include <vector>
 #include <string>
 #include <iostream>
+#include <array>
+
+struct SetOptions;
 
 enum MIDIType : uint16_t {
 	singleTrack = 0,
@@ -50,18 +53,23 @@ enum class NoteType{
 	MAJOR, MINOR, ALL
 };
 
+enum PedalType : uint8_t {
+	EXPRESSION = 11, DAMPER = 64, SOSTENUTO = 66, SOFT = 67
+};
+
 // Debug print data.
 
-extern std::map<MetaEventType, std::string> metaEventTypeName;
+extern std::unordered_map<MetaEventType, std::string> metaEventTypeName;
 
-extern std::map<MIDIEventType, std::string> MIDIEventTypeName;
+extern std::unordered_map<MIDIEventType, std::string> MIDIEventTypeName;
 
 // Keyboard shifts.
-// \todo Cleanup.
 
-extern std::vector<bool> noteIsMinor;
+extern const std::array<bool, 12> noteIsMinor;
 
-extern std::vector<short> noteShift;
+extern const std::array<short, 12> noteShift;
+
+extern const char* midiKeysStrings[];
 
 // Read data.
 
@@ -113,6 +121,11 @@ inline double computeMeasureDuration(int tempo, double signature){
 
 inline double computeUnitsDuration(int tempo, size_t time, uint16_t unitsPerQuarterNote){
 	return double(tempo) / double(unitsPerQuarterNote) * double(time);
+}
+
+template <typename T>
+T clamp(T x, T a, T b) {
+	return (std::min)((std::max)(x, a), b);
 }
 
 

@@ -14,7 +14,7 @@ public:
 	~ScreenQuad();
 
 	/// Init function
-	void init(GLuint textureId, const std::string & fragName);
+	void init(GLuint textureId, const std::string & fragName, const std::string & vertName = "screenquad_vert");
 
 	void init(const std::string & fragName, const std::string & vertName = "screenquad_vert");
 
@@ -30,10 +30,10 @@ public:
 	/// Clean function
 	void clean();
 	
-	GLuint programId(){return _programId; }
+	ShaderProgram& program(){ return _program; }
 	
 protected:
-	GLuint _programId;
+	ShaderProgram _program;
 	
 private:
 	

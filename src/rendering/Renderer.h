@@ -1,141 +1,86 @@
-#ifndef Renderer_h
-#define Renderer_h
-#include <GLFW/glfw3.h>
+#pragma once
 #include <gl3w/gl3w.h>
 #include <glm/glm.hpp>
-#include <memory>
-#include <array>
 
-#include "Framebuffer.h"
-#include "camera/Camera.h"
-#include "MIDIScene.h"
-#include "ScreenQuad.h"
-#include "Score.h"
-
-#include "../helpers/Recorder.h"
-
+#include "../midi/MIDIFile.h"
 #include "State.h"
+#include "../helpers/ProgramUtilities.h"
 
-#define DEBUG_SPEED (1.0f)
+#include <fstream>
+#include <memory>
 
-struct SystemAction {
-	enum Type {
-		NONE, FIX_SIZE, FREE_SIZE, FULLSCREEN, QUIT, RESIZE
-	};
-
-	Type type;
-	glm::ivec4 data;
-
-	SystemAction(Type action);
-};
-
+class MIDIScene;
 
 class Renderer {
 
 public:
 
-	Renderer(int winW, int winH, bool fullscreen);
+	void renderSetup();
 
-	~Renderer();
-	
-	bool loadFile(const std::string & midiFilePath);
+	void upload(const std::shared_ptr<MIDIScene>& scene);
 
-	void setState(const State & state);
-	
+	void setScaleAndMinorWidth(const float scale, const float minorWidth);
+
+	void setParticlesParameters(const float speed, const float expansion);
+
+	void setKeyboardSizeAndFadeout(float keyboardHeight, float fadeOut);
+
+	void setMinorEdgesAndHeight(bool minorEdges, float minorHeight);
+
+	void setMinMaxKeys(int minKey, int minKeyMajor, int notesCount);
+
+	void setOrientation(bool horizontal);
+
 	/// Draw function
-	SystemAction draw(const float currentTime);
+	void drawNotes(const std::shared_ptr<MIDIScene>& scene, float time, const glm::vec2 & invScreenSize, const State::NotesState & state, bool reverseScroll, bool prepass);
 	
-	/// Clean function
+	void drawFlashes(const std::shared_ptr<MIDIScene>& scene, float time, const glm::vec2 & invScreenSize, const State::FlashesState& state);
+	
+	void drawParticles(const std::shared_ptr<MIDIScene>& scene, float time, const glm::vec2 & invScreenSize, const State::ParticlesState & state, bool prepass);
+	
+	void drawKeyboard(const std::shared_ptr<MIDIScene>& scene, float time, const glm::vec2 & invScreenSize, const glm::vec3 & keyColor, const ColorArray & majorColors, const ColorArray & minorColors, bool highlightKeys);
+
+	void drawPedals(const std::shared_ptr<MIDIScene>& scene, float time, const glm::vec2 & invScreenSize, const State::PedalsState & state, float keyboardHeight, bool horizontalMode);
+
+	void drawWaves(const std::shared_ptr<MIDIScene>& scene, float time, const glm::vec2 & invScreenSize, const State::WaveState & state, float keyboardHeight);
+
+	void drawScore(const std::shared_ptr<MIDIScene>& scene, float time, const glm::vec2 & invScreenSize, const State::ScoreState & state, float measureScale, float qualityScale,  float keyboardHeight, bool horizontalMode, bool reverseScroll);
+
 	void clean();
 
-	/// Handle screen resizing
-	void resize(int width, int height);
-
-	/// Handle window content density.
-	void rescale(float scale);
-
-	void resizeAndRescale(int width, int height, float scale);
-
-	/// Handle keyboard inputs
-	void keyPressed(int key, int action);
-
-	/// Diretly start recording.
-	void startDirectRecording(const std::string & path, Recorder::Format format, int framerate, int bitrate, bool skipBackground, const glm::vec2 & size);
-	
 private:
 	
+	ShaderProgram _programNotes;
+	ShaderProgram _programFlashes;
+	ShaderProgram _programParticules;
+	ShaderProgram _programKeyMinors;
+	ShaderProgram _programKeyMajors;
+	ShaderProgram _programPedals;
+	ShaderProgram _programWave;
+	ShaderProgram _programWaveNoise;
+	ShaderProgram _programScoreBars;
+	ShaderProgram _programScoreLabels;
 
-	struct Layer {
-		
-		enum Type : unsigned int {
-			BGCOLOR = 0, BGTEXTURE, BLUR, ANNOTATIONS, KEYBOARD, PARTICLES, NOTES, FLASHES
-		};
+	GLuint _notesDataBuffer;
+	GLuint _keysDataBuffer;
+	GLuint _quadVertices;
+	GLuint _quadIndices;
+	GLuint _waveVertices;
+	GLuint _waveIndices;
 
-		Type type = BGCOLOR;
-		std::string name = "None";
-		void (Renderer::*draw)(const glm::vec2 &) = nullptr;
-		bool * toggle = nullptr;
+	GLuint _vaoQuad;
+	GLuint _vaoQuadWithNoteData;
+	GLuint _vaoQuadWithKeyData;
+	size_t _quadPrimitiveCount;
 
-	};
+	GLuint _vaoWave;
+	size_t _wavePrimitiveCount;
 
-	void blurPrepass();
+	GLuint _texParticles;
+	GLuint _texFont;
+	GLuint _texNoise;
 
-	void drawBackgroundImage(const glm::vec2 & invSize);
-
-	void drawBlur(const glm::vec2 & invSize);
-
-	void drawParticles(const glm::vec2 & invSize);
-
-	void drawScore(const glm::vec2 & invSize);
-
-	void drawKeyboard(const glm::vec2 & invSize);
-
-	void drawNotes(const glm::vec2 & invSize);
-
-	void drawFlashes(const glm::vec2 & invSize);
-
-	SystemAction drawGUI(const float currentTime);
-
-	void drawScene(bool transparentBG);
-
-	void showLayers();
-
-	void applyAllSettings();
-	
-	void reset();
-
-	void startRecording();
-
-	void updateSizes();
-
-	State _state;
-	std::array<Layer, 8> _layers;
-
-
-	float _timer;
-	float _timerStart;
-	bool _shouldPlay;
-	bool _showGUI;
-	bool _showDebug;
-
-	Recorder _recorder;
-	
-	Camera _camera;
-	
-	std::shared_ptr<Framebuffer> _particlesFramebuffer;
-	std::shared_ptr<Framebuffer> _blurFramebuffer;
-	std::shared_ptr<Framebuffer> _finalFramebuffer;
-
-	std::shared_ptr<MIDIScene> _scene;
-	ScreenQuad _blurringScreen;
-	ScreenQuad _passthrough;
-	ScreenQuad _backgroundTexture;
-	std::shared_ptr<Score> _score;
-
-	glm::ivec2 _windowSize;
-	bool _showLayers = false;
-	bool _exitAfterRecording = false;
-	bool _fullscreen = false;
+	// Cached info.
+	unsigned int _minKeyMajor{0};
+	unsigned int _keyCount{128};
 };
-
-#endif

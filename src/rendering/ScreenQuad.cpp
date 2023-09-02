@@ -11,8 +11,8 @@ ScreenQuad::ScreenQuad(){}
 
 ScreenQuad::~ScreenQuad(){}
 
-void ScreenQuad::init(GLuint textureId, const std::string & fragName){
-	init(fragName);
+void ScreenQuad::init(GLuint textureId, const std::string & fragName, const std::string & vertName){
+	init(fragName, vertName);
 	// Link the texture of the framebuffer for this program.
 	_textureId = textureId;
 	checkGLError();
@@ -21,7 +21,7 @@ void ScreenQuad::init(GLuint textureId, const std::string & fragName){
 void ScreenQuad::init(const std::string & fragName, const std::string & vertName) {
 
 	// Load the shaders
-	_programId = createGLProgramFromStrings(ResourcesManager::getStringForShader(vertName), ResourcesManager::getStringForShader(fragName));
+	_program.init(vertName, fragName);
 
 	// Load geometry.
 	std::vector<float> quadVertices{ -1.0, -1.0,  0.0,
@@ -57,11 +57,6 @@ void ScreenQuad::init(const std::string & fragName, const std::string & vertName
 
 	glBindVertexArray(0);
 
-	// Link the texture of the framebuffer for this program.
-	glUseProgram(_programId);
-	GLuint texUniID = glGetUniformLocation(_programId, "screenTexture");
-	glUniform1i(texUniID, 0);
-	glUseProgram(0);
 	checkGLError();
 }
 
@@ -78,14 +73,12 @@ void ScreenQuad::draw(float time, glm::vec2 invScreenSize){
 void ScreenQuad::draw(GLuint texId, float time) {
 
 	// Select the program (and shaders).
-	glUseProgram(_programId);
+	_program.use();
 
-	GLuint timeID = glGetUniformLocation(_programId, "time");
-	glUniform1f(timeID, time);
+	_program.uniform("time", time);
 
 	// Active screen texture.
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, texId);
+	_program.texture("screenTexture", texId, GL_TEXTURE_2D);
 
 	// Select the geometry.
 	glBindVertexArray(_vao);
@@ -100,11 +93,10 @@ void ScreenQuad::draw(GLuint texId, float time) {
 void ScreenQuad::draw(GLuint texid, float time, glm::vec2 invScreenSize) {
 
 	// Select the program (and shaders).
-	glUseProgram(_programId);
+	_program.use();
 
 	// Inverse screen size uniform.
-	GLuint screenId = glGetUniformLocation(_programId, "inverseScreenSize");
-	glUniform2fv(screenId, 1, &(invScreenSize[0]));
+	_program.uniform("inverseScreenSize", invScreenSize);
 
 	draw(texid, time);
 }

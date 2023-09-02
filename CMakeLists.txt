@@ -20,8 +20,15 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(libs/glfw/)
 
-# Add NativeFileDialog
-add_subdirectory(libs/nfd/)
+# Add sr_gui
+add_subdirectory(libs/sr_gui/)
+
+# Add libremidi
+set(LIBREMIDI_HEADER_ONLY OFF CACHE BOOL "" FORCE)
+set(LIBREMIDI_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LIBREMIDI_NO_WINUWP ON CACHE BOOL "" FORCE)
+add_definitions(-DLIBREMIDI_NO_BOOST)
+add_subdirectory(libs/libremidi/)
 
 # Add OpenGL
 find_package(OpenGL REQUIRED)
@@ -69,6 +76,7 @@ set(LibSources
 	"src/libs/imgui/imgui_impl_opengl3.cpp"
 	"src/libs/imgui/imgui_impl_opengl3.h"
 	"src/libs/imgui/imgui_internal.h"
+	"src/libs/imgui/imgui_tables.cpp"
 	"src/libs/imgui/imgui_widgets.cpp"
 	"src/libs/imgui/imstb_rectpack.h"
 	"src/libs/imgui/imstb_textedit.h"
@@ -82,8 +90,6 @@ set(LibSources
 )
 
 set(Sources
-	"src/helpers/MeshUtilities.cpp"
-	"src/helpers/MeshUtilities.h"
 	"src/helpers/ProgramUtilities.cpp"
 	"src/helpers/ProgramUtilities.h"
 	"src/helpers/ResourcesManager.cpp"
@@ -92,6 +98,10 @@ set(Sources
 	"src/helpers/Recorder.h"
 	"src/helpers/Configuration.cpp"
 	"src/helpers/Configuration.h"
+	"src/helpers/ImGuiStyle.cpp"
+	"src/helpers/ImGuiStyle.h"
+	"src/helpers/System.cpp"
+	"src/helpers/System.h"
 	"src/midi/MIDIFile.cpp"
 	"src/midi/MIDIFile.h"
 	"src/midi/MIDITrack.cpp"
@@ -100,38 +110,45 @@ set(Sources
 	"src/midi/MIDIUtils.h"
 	"src/midi/MIDIBase.cpp"
 	"src/midi/MIDIBase.h"
-	"src/rendering/Score.cpp"
-	"src/rendering/Score.h"
 	"src/rendering/Framebuffer.cpp"
 	"src/rendering/Framebuffer.h"
-	"src/rendering/MIDIScene.cpp"
-	"src/rendering/MIDIScene.h"
+	"src/rendering/scene/MIDIScene.cpp"
+	"src/rendering/scene/MIDIScene.h"
+	"src/rendering/scene/MIDISceneFile.cpp"
+	"src/rendering/scene/MIDISceneFile.h"
+	"src/rendering/scene/MIDISceneLive.cpp"
+	"src/rendering/scene/MIDISceneLive.h"
+	"src/rendering/Viewer.cpp"
+	"src/rendering/Viewer.h"
 	"src/rendering/Renderer.cpp"
 	"src/rendering/Renderer.h"
 	"src/rendering/ScreenQuad.cpp"
 	"src/rendering/ScreenQuad.h"
 	"src/rendering/State.cpp"
 	"src/rendering/State.h"
+	"src/rendering/SetOptions.cpp"
+	"src/rendering/SetOptions.h"
 	"src/rendering/camera/Camera.cpp"
 	"src/rendering/camera/Camera.h"
 	"src/rendering/camera/Keyboard.cpp"
 	"src/rendering/camera/Keyboard.h"
-	"src/resources/data.h"
-	"src/resources/flash_image.cpp"
-	"src/resources/font_image.cpp"
-	"src/resources/particles_image.cpp"
-	"src/resources/shaders.cpp"
+	"src/resources/strings.h"
 	"src/main.cpp")
+
+file(GLOB DataSources
+	"src/resources/*.h"
+	"src/resources/*.cpp"
+)
 
 file(GLOB Shaders "resources/shaders/*.vert" "resources/shaders/*.frag")
 
-source_group(TREE ${PROJECT_SOURCE_DIR}/src FILES ${Sources} ${LibSources})
+source_group(TREE ${PROJECT_SOURCE_DIR}/src FILES ${Sources} ${DataSources} ${LibSources})
 source_group(TREE ${PROJECT_SOURCE_DIR}/resources FILES ${Shaders})
 
-add_executable(MIDIVisualizer ${LibSources} ${Sources} ${Shaders})
+add_executable(MIDIVisualizer ${LibSources} ${Sources} ${DataSources} ${Shaders})
 
 target_include_directories(MIDIVisualizer PRIVATE src/libs/ src/helpers/)
-target_link_libraries(MIDIVisualizer PRIVATE nfd glfw ${GLFW_LIBRARIES} ${OPENGL_gl_LIBRARY})
+target_link_libraries(MIDIVisualizer PRIVATE sr_gui glfw libremidi ${GLFW_LIBRARIES} ${OPENGL_gl_LIBRARY})
 add_dependencies(MIDIVisualizer Packaging)
 
 # Add dependency to FFmpeg if available.

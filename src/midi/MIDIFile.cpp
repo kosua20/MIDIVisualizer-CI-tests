@@ -3,41 +3,13 @@
 #include <fstream>
 
 #include "MIDIFile.h"
-
-#ifdef _WIN32
-#define NOMINMAX
-#include <windows.h>
-
-WCHAR * widen(const std::string & str){
-	const int size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, NULL, 0);
-	WCHAR *arr = new WCHAR[size];
-	MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, (LPWSTR)arr, size);
-	// Will leak on Windows.
-	return arr;
-}
-
-std::string narrow(WCHAR * str){
-	const int size = WideCharToMultiByte(CP_UTF8, 0, str, -1, NULL, 0, NULL, NULL);
-	std::string res(size - 1, 0);
-	WideCharToMultiByte(CP_UTF8, 0, str, -1, &res[0], size, NULL, NULL);
-	return res;
-}
-
-#else
-
-const char * widen(const std::string & str){
-	return str.c_str();
-}
-std::string narrow(char * str) {
-	return std::string(str);
-}
-
-#endif
+#include "../helpers/System.h"
+#include "../rendering/State.h"
 
 MIDIFile::MIDIFile(){};
 
 MIDIFile::MIDIFile(const std::string & filePath){
-	std::ifstream input(widen(filePath), std::ios::in|std::ios::binary);
+	std::ifstream input = System::openInputFile(filePath, true);
 
 	if(!input.is_open()) {
 		std::cerr << "[ERROR]: Couldn't find file at path " << filePath << std::endl;
@@ -48,6 +20,7 @@ MIDIFile::MIDIFile(const std::string & filePath){
 	std::copy(std::istreambuf_iterator<char>(input),
 			  std::istreambuf_iterator<char>(),
 			  std::back_inserter(buffer));
+	input.close();
 
 	// Check midi header
 	if(buffer.size() < 5 || !(buffer[0] == 'M' && buffer[1] == 'T' && buffer[2] == 'h' && buffer[3] == 'd') || read32(buffer, 4) != 6){
@@ -75,7 +48,7 @@ MIDIFile::MIDIFile(const std::string & filePath){
 
 	bool shouldMerge = false;
 	if(_format == singleTrack && tracksCount > 1){
-		std::cerr << "[WARN]: " << "Too many tracks, will merge all tracks." << std::endl;
+		std::cerr << "[WARNING]: " << "Too many tracks, will merge all tracks." << std::endl;
 		shouldMerge = true;
 	}
 
@@ -117,9 +90,12 @@ MIDIFile::MIDIFile(const std::string & filePath){
 	_secondsPerMeasure = computeMeasureDuration(_tempos[0].tempo, _signature);
 
 	// Convert each track to real notes.
-	for(auto & track : _tracks){
-		track.extractNotes(_tempos, _unitsPerQuarterNote, 21, 108);
+	for(size_t tid = 0; tid < _tracks.size(); ++tid){
+		auto & track = _tracks[tid];
+		track.extractNotes(_tempos, _unitsPerQuarterNote, (unsigned int)tid);
 	}
+	// Save count before merging.
+	_trackCount = _tracks.size();
 
 	// For now, still merge.
 	shouldMerge = true;
@@ -127,7 +103,21 @@ MIDIFile::MIDIFile(const std::string & filePath){
 		mergeTracks();
 	}
 
-	input.close();
+	// Normalize pedal values.
+	for(auto & track : _tracks){
+		track.normalizePedalVelocity();
+	}
+
+	// Compute duration.
+	FilterOptions noFilter;
+	for(const auto & track : _tracks){
+		std::vector<MIDINote> notes;
+		track.getNotes(notes, NoteType::ALL, noFilter);
+		for(const auto & note : notes){
+			_duration = (std::max)(_duration, note.start + note.duration);
+		}
+		_notesCount += int(notes.size());
+	}
 }
 
 void MIDIFile::print() const {
@@ -150,7 +140,7 @@ void MIDIFile::populateTemposAndSignature(){
 	}
 
 	// Merge all tempos.
-	std::map<size_t, MIDITempo> tempoChanges;
+	std::unordered_map<size_t, MIDITempo> tempoChanges;
 	// Emplace default tempo, will be overwritten as soon as there is an initial tempo event.
 	tempoChanges[0] = MIDITempo(0, 500000);
 	for(const auto & tempo : mixedTempos){
@@ -183,18 +173,29 @@ void MIDIFile::mergeTracks(){
 	
 }
 
-void MIDIFile::getNotes(std::vector<MIDINote> & notes, NoteType type, size_t track) const {
+void MIDIFile::getNotes(std::vector<MIDINote> & notes, NoteType type, const FilterOptions& filter, size_t track) const {
 	if(track >= _tracks.size()){
 		return;
 	}
-	_tracks[track].getNotes(notes, type);
+	_tracks[track].getNotes(notes, type, filter );
 }
 
-void MIDIFile::getNotesActive(std::vector<ActiveNoteInfos> & actives, double time, size_t track) const {
-
+void MIDIFile::getNotesActive(ActiveNotesArray & actives, double time, const FilterOptions& filter, size_t track) const {
 	if(track >= _tracks.size()){
 		return;
 	}
-	_tracks[track].getNotesActive(actives, time);
+	_tracks[track].getNotesActive(actives, time, filter);
+}
 
+void MIDIFile::getPedalsActive(float & damper, float &sostenuto, float &soft, float &expression, double time, size_t track) const {
+	if(track >= _tracks.size()){
+		return;
+	}
+	_tracks[track].getPedalsActive(damper, sostenuto, soft, expression, time);
+}
+
+void MIDIFile::updateSets(const SetOptions & options){
+	for(auto & track : _tracks){
+		track.updateSets(options);
+	}
 }

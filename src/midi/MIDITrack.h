@@ -3,6 +3,10 @@
 
 #include "MIDIBase.h"
 
+typedef std::array<ActiveNoteInfos, 128> ActiveNotesArray;
+
+struct FilterOptions;
+
 class MIDITrack {
 public:
 	
@@ -10,15 +14,21 @@ public:
 	
 	double extractTempos(std::vector<MIDITempo> & tempos) const;
 
-	void extractNotes(const std::vector<MIDITempo> & tempos, uint16_t unitsPerQuarterNote, short minId, short maxId);
+	void extractNotes(const std::vector<MIDITempo> & tempos, uint16_t unitsPerQuarterNote, unsigned int trackId);
 
 	void print() const;
 
-	void getNotes(std::vector<MIDINote> & notes, NoteType type) const;
+	void getNotes(std::vector<MIDINote> & notes, NoteType type, const FilterOptions& filter ) const;
 
-	void getNotesActive(std::vector<ActiveNoteInfos>& actives, double time) const;
+	void getNotesActive(ActiveNotesArray & actives, double time, const FilterOptions& filter ) const;
 
+	void normalizePedalVelocity();
+
+	void getPedalsActive(float & damper, float &sostenuto, float &soft, float &expression, double time) const;
+	
 	void merge(MIDITrack & other);
+
+	void updateSets(const SetOptions & options);
 
 private:
 
@@ -26,6 +36,8 @@ private:
 
 	std::vector<MIDIEvent> _events;
 	std::vector<MIDINote> _notes;
+	std::vector<MIDIPedal> _pedals;
+
 	std::string _name;
 	std::string _instrument;
 	uint8_t _previousEventFirstByte = 0x0;

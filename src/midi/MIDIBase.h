@@ -5,15 +5,29 @@
 
 struct MIDINote {
 
-	MIDINote(short aNote, double aStart, double aDuration, short aVelocity, short aChannel);
+	MIDINote(short aNote, double aStart, double aDuration, short aVelocity, short aChannel, unsigned int trackId);
 
 	void print() const;
 
 	double start;
 	double duration;
+	unsigned int track;
+	int set;
 	short note;
 	short velocity;
 	short channel;
+};
+
+struct MIDIPedal {
+
+	MIDIPedal(PedalType aType, double aStart, double aDuration, float velocity);
+
+	void print() const;
+	
+	double start;
+	double duration;
+	float velocity;
+	PedalType type;
 };
 
 struct MIDIEvent {
@@ -51,6 +65,8 @@ struct MIDITempo {
 struct ActiveNoteInfos {
 	float start = 1000000.0f;
 	float duration = 0.0f;
+	float velocity = 64.0f;
+	int set = -1;
 	bool enabled = false;
 };
 

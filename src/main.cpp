@@ -3,89 +3,82 @@
 #include "helpers/ProgramUtilities.h"
 #include "helpers/Configuration.h"
 #include "helpers/ResourcesManager.h"
+#include "helpers/ImGuiStyle.h"
+#include "helpers/System.h"
 
-#include "rendering/Renderer.h"
+#include "rendering/Viewer.h"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_impl_opengl3.h>
 
-#include <nfd.h>
+#include <sr_gui.h>
 #include <iostream>
 #include <algorithm>
-
-#define INITIAL_SIZE_WIDTH 1280
-#define INITIAL_SIZE_HEIGHT 600
-
-
-void printHelp(){
-	size_t alignSize = 0;
-	const std::string opts = State::helpText(alignSize);
-
-	const std::vector<std::pair<std::string, std::string>> genOpts = {
-		{"midi", "path to a MIDI file to load"},
-		{"config", "path to a configuration INI file"},
-		{"size", "dimensions of the window (--size W H)"},
-		{"fullscreen", "start in fullscreen (1 or 0 to enabled/disable)"},
-	};
-
-	const std::vector<std::pair<std::string, std::string>> expOpts = {
-		{"export", "path to the output video (or directory for PNG)"},
-		{"format", "output format (values: PNG, MPEG2, MPEG4)"},
-		{"framerate", "number of frames per second to export (integer)"},
-		{"bitrate", "target video bitrate in Mb (integer)"},
-		{"png-alpha", "use transparent PNG background (1 or 0 to enabled/disable)"},
-		{"hide-window", "do not display the window (1 or 0 to enabled/disable)"},
-	};
-
-	std::cout << "---- Infos ---- MIDIVisualizer v" << MIDIVIZ_VERSION_MAJOR << "." << MIDIVIZ_VERSION_MINOR << " --------" << std::endl
-	<< "Visually display a midi file in real time." << std::endl
-	<< "Created by Simon Rodriguez (https://github.com/kosua20/MIDIVisualizer)" << std::endl
-	<< std::endl << "* General options: " << std::endl;
-	for(const auto & opt : genOpts){
-		const std::string pad(std::max(int(alignSize) - int(opt.first.size()), 0), ' ');
-		std::cout << "--" << opt.first << pad << opt.second << std::endl;
-	}
-	std::cout << std::endl << "* Export options: (--export path is mandatory)" << std::endl;
-	for(const auto & opt : expOpts){
-		const std::string pad(std::max(int(alignSize) - int(opt.first.size()), 0), ' ');
-		std::cout << "--" << opt.first << pad << opt.second << std::endl;
-	}
-	std::cout << std::endl << "* Configuration options: (will override config file)" << std::endl
-	<< opts << std::endl;
-
-}
 
 /// Callbacks
 
 void resize_callback(GLFWwindow* window, int width, int height){
-	Renderer *renderer = static_cast<Renderer*>(glfwGetWindowUserPointer(window));
-	renderer->resize(width, height);
+	Viewer *viewer = static_cast<Viewer*>(glfwGetWindowUserPointer(window));
+	viewer->resize(width, height);
 }
 
 void rescale_callback(GLFWwindow* window, float xscale, float yscale){
-	Renderer *renderer = static_cast<Renderer*>(glfwGetWindowUserPointer(window));
+	Viewer *viewer = static_cast<Viewer*>(glfwGetWindowUserPointer(window));
 	// Assume only one of the two for now.
-	renderer->rescale(xscale);
+	viewer->rescale(xscale);
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods){
-	
-	// Handle quitting
-	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS){ 
-		glfwSetWindowShouldClose(window, GL_TRUE);
-		return;
-	}
 	if(!ImGui::GetIO().WantCaptureKeyboard){
-		// Get pointer to the renderer.
-		Renderer *renderer = static_cast<Renderer*>(glfwGetWindowUserPointer(window));
-		renderer->keyPressed(key, action);
+		// Get pointer to the viewer.
+		Viewer *viewer = static_cast<Viewer*>(glfwGetWindowUserPointer(window));
+		viewer->keyPressed(key, action);
 	}
 	ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset){
 	ImGui_ImplGlfw_ScrollCallback(window, xoffset, yoffset);
+}
+
+void drop_callback(GLFWwindow* window, int count, const char** paths){
+	if(count == 0){
+		return;
+	}
+
+	Viewer *viewer = static_cast<Viewer*>(glfwGetWindowUserPointer(window));
+	bool loadedMIDI = false;
+	bool loadedConfig = false;
+	for(int i = 0; i < count; ++i){
+		std::string path(paths[i]);
+		if(path.empty()){
+			continue;
+		}
+		const std::string::size_type pos = path.rfind('.');
+		if(pos == std::string::npos){
+			continue;
+		}
+		if(pos == path.size() - 1){
+			continue;
+		}
+		const std::string extension = path.substr(pos + 1);
+		// Determine path file type.
+		const bool isMIDI = extension == "mid" || extension == "midi";
+		const bool isConfig = extension == "ini" || extension == "config";
+		// Attempt to load MIDI if not already loaded.
+		if(!loadedMIDI && isMIDI){
+			loadedMIDI = viewer->loadFile(path);
+		}
+		// Attempt to load state if not already loaded.
+		if(!loadedConfig && isConfig){
+			State newState;
+			loadedConfig = newState.load(path);
+			if(loadedConfig){
+				viewer->setState(newState);
+			}
+		}
+	}
 }
 
 /// Perform system window action.
@@ -123,9 +116,13 @@ void performAction(SystemAction action, GLFWwindow * window, glm::ivec4 & frame)
 			break;
 		case SystemAction::FIX_SIZE:
 			glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_FALSE);
+			// This is for recording, to go as fast as possible on the GPU side.
+			glfwSwapInterval(0);
 			break;
 		case SystemAction::FREE_SIZE:
 			glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_TRUE);
+			// Restore V-sync after recording end.
+			glfwSwapInterval(1);
 			break;
 		case SystemAction::QUIT:
 			glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -134,196 +131,237 @@ void performAction(SystemAction action, GLFWwindow * window, glm::ivec4 & frame)
 	}
 }
 
-/// The main function
+const char* getGlfwErrorType(int type){
+	switch (type) {
+		case GLFW_NO_ERROR: 			return "NO_ERROR";
+		case GLFW_NOT_INITIALIZED: 		return "NOT_INITIALIZED";
+		case GLFW_NO_CURRENT_CONTEXT: 	return "NO_CURRENT_CONTEXT";
+		case GLFW_INVALID_ENUM: 		return "INVALID_ENUM";
+		case GLFW_INVALID_VALUE: 		return "INVALID_VALUE";
+		case GLFW_OUT_OF_MEMORY: 		return "OUT_OF_MEMORY";
+		case GLFW_API_UNAVAILABLE: 		return "API_UNAVAILABLE";
+		case GLFW_VERSION_UNAVAILABLE: 	return "VERSION_UNAVAILABLE";
+		case GLFW_PLATFORM_ERROR: 		return "PLATFORM_ERROR";
+		case GLFW_FORMAT_UNAVAILABLE: 	return "FORMAT_UNAVAILABLE";
+		case GLFW_NO_WINDOW_CONTEXT: 	return "NO_WINDOW_CONTEXT";
+		default:						break;
+	}
+	return "UNKNOWN";
+}
 
+void logLastGlfwError(){
+	const char* msg = nullptr;
+	const int code = glfwGetError(&msg);
+	if(code == GLFW_NO_ERROR){
+		return;
+	}
+	std::cerr << "[ERROR]: GLFW error: " << getGlfwErrorType(code) << " \"" << (msg ? msg : "") << "\"" << std::endl;
+}
+
+/// The main function
 int main( int argc, char** argv) {
 
-	// Parse arguments.
-	bool showHelp = false;
-	Arguments args = Configuration::parseArguments(std::vector<std::string>(argv, argv+argc), showHelp);
-
-	if(showHelp){
-		printHelp();
-		return 0;
-	}
+	sr_gui_init();
 
 	// Initialize glfw, which will create and setup an OpenGL context.
 	if (!glfwInit()) {
-		std::cerr << "[ERROR]: could not start GLFW3" << std::endl;
+		std::cerr << "[ERROR]: could not init GLFW3" << std::endl;
+		logLastGlfwError();
+		sr_gui_show_message("Unable to start MIDIVisualizer", "Could not init GLFW", SR_GUI_MESSAGE_LEVEL_ERROR);
+		sr_gui_cleanup();
 		return 2;
+	}
+	// Ensure we are using the C locale.
+	System::forceLocale();
+
+	// Retrieve the settings directory for all applications.
+	std::string applicationDataPath = System::getApplicationDataDirectory();
+	// If this is not empty (ie the working directory), be a good citizen
+	// and save config in a subdirectory belonging to MIDIVisualizer.
+	if(!applicationDataPath.empty()){
+		// We also need to make sure the directory exist.
+		System::createDirectory(applicationDataPath);
+		// And create a subdirectory for MIDIVisualizer.
+		applicationDataPath += "MIDIVisualizer/";
+		// Idem.
+		System::createDirectory(applicationDataPath);
+	}
+	const std::string internalConfigPath = applicationDataPath + Configuration::defaultName();
+
+	// This has to be called after glfwInit for the working dir to be OK on macOS.
+	Configuration config(internalConfigPath, std::vector<std::string>(argv, argv+argc));
+
+	if(config.showHelp){
+		Configuration::printHelp();
+		glfwTerminate();
+		sr_gui_cleanup();
+		return 0;
+	}
+	if(config.showVersion){
+		Configuration::printVersion();
+		glfwTerminate();
+		sr_gui_cleanup();
+		return 0;
 	}
 	
 	// On OS X, the correct OpenGL profile and version to use have to be explicitely defined.
-	glfwWindowHint (GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint (GLFW_CONTEXT_VERSION_MINOR, 2);
-	glfwWindowHint (GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-	glfwWindowHint (GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	int isw = INITIAL_SIZE_WIDTH;
-	int ish = INITIAL_SIZE_HEIGHT;
-	if(args.count("size") > 0){
-		const auto & vals = args["size"];
-		if(vals.size() >= 2){
-			isw = Configuration::parseInt(vals[0]);
-			ish = Configuration::parseInt(vals[1]);
-		}
-	}
-
-	// Fullscreen at launch.
-	bool fullscreen = false;
-	if(args.count("fullscreen") > 0 && Configuration::parseBool(args["fullscreen"][0])){
-		fullscreen = true;
-	}
-
-	// Hide window if needed.
-	if(args.count("hide-window") > 0 && Configuration::parseBool(args["hide-window"][0])){
-		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-	}
+	// Window visiblity and transparency.
+	glfwWindowHint(GLFW_VISIBLE, config.hideWindow ? GLFW_FALSE : GLFW_TRUE);
+	glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, config.preventTransparency ? GLFW_FALSE : GLFW_TRUE);
 
 	// Create a window with a given size. Width and height are macros as we will need them again.
-	GLFWwindow* window = glfwCreateWindow(isw, ish,"MIDI Visualizer", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(config.windowSize[0], config.windowSize[1], "MIDI Visualizer", NULL, NULL);
 	if (!window) {
-		std::cerr << "[ERROR]: could not open window with GLFW3" << std::endl;
+		std::cerr << "[ERROR]: Could not open window with GLFW3" << std::endl;
+		logLastGlfwError();
 		glfwTerminate();
+		sr_gui_show_message("Unable to start MIDIVisualizer", "Could not open window with GLFW3", SR_GUI_MESSAGE_LEVEL_ERROR);
+		sr_gui_cleanup();
 		return 2;
 	}
+	// Set window position.
+	glfwSetWindowPos(window, config.windowPos[0], config.windowPos[1]);
+	// Check if transparency was successfully enabled.
+	config.preventTransparency = glfwGetWindowAttrib(window, GLFW_TRANSPARENT_FRAMEBUFFER) == GLFW_FALSE;
 
 	// Bind the OpenGL context and the new window.
 	glfwMakeContextCurrent(window);
 
-	if (gl3wInit()) {
-		std::cerr << "Failed to initialize OpenGL" << std::endl;
-		return -1;
-	}
-	if (!gl3wIsSupported(3, 2)) {
-		std::cerr << "OpenGL 3.2 not supported\n" << std::endl;
-		return -1;
-	}
-
-	std::string midiFilePath;
-	// Check if a path is given in argument.
-	if(args.count("midi") > 0){
-		midiFilePath = args["midi"][0];
-	} else {
-		// We are in direct-to-gui mode.
-		nfdchar_t *outPath = NULL;
-		nfdresult_t result = NFD_OpenDialog( NULL, NULL, &outPath );
-		if(result == NFD_OKAY){
-			midiFilePath = std::string(outPath);
-		} else if(result == NFD_CANCEL){
-			return 0;
-		} else {
-			return 10;
-		}
-	}
-
-	// Setup resources.
-	ResourcesManager::loadResources();
-	// Create the renderer.
-	Renderer renderer(isw, ish, fullscreen);
-
-	// Load midi file, graphics setup.
-	if(!renderer.loadFile(midiFilePath)){
-		// File not found, probably (error message handled locally).
-		renderer.clean();
-		glfwDestroyWindow(window);
+	if(gl3wInit()){
+		std::cerr << "[ERROR]: Failed to initialize OpenGL" << std::endl;
+		logLastGlfwError();
 		glfwTerminate();
-		return 3;
+		sr_gui_show_message("Unable to start MIDIVisualizer", "Failed to initialize OpenGL", SR_GUI_MESSAGE_LEVEL_ERROR);
+		sr_gui_cleanup();
+		return -1;
+	}
+	if(!gl3wIsSupported(3, 2)){
+		std::cerr << "[ERROR]: OpenGL 3.2 not supported" << std::endl;
+		logLastGlfwError();
+		glfwTerminate();
+		sr_gui_show_message("Unable to start MIDIVisualizer", "OpenGL 3.2 not supported", SR_GUI_MESSAGE_LEVEL_ERROR);
+		sr_gui_cleanup();
+		return -1;
 	}
 
-	// Apply custom state.
-	State state;
-	if(args.count("config") > 0){
-		state.load(args.at("config")[0]);
-	}
-	// Apply any extra display argument on top of the (optional) config.
-	state.load(args);
-	renderer.setState(state);
-	
-	// Define utility pointer for callbacks (can be obtained back from inside the callbacks).
-	glfwSetWindowUserPointer(window, &renderer);
-	// Callbacks.
-	glfwSetFramebufferSizeCallback(window, resize_callback);	// Resizing the window
-	glfwSetKeyCallback(window,key_callback);					// Pressing a key
-	glfwSetScrollCallback(window,scroll_callback);				// Scrolling
-	glfwSetCharCallback(window, ImGui_ImplGlfw_CharCallback);
-	//glfwSetWindowContentScaleCallback(window, rescale_callback);
-	glfwSwapInterval(1);
+	// The font should be maintained alive until the atlas is built.
+	ImFontConfig font;
+	// We need a scope to ensure the viewer is deleted before the OpenGL context is destroyed.
+	{
 
-	// On HiDPI screens, we might have to initially resize the framebuffers size.
-	glm::ivec4 frame(0);
-	glfwGetWindowPos(window, &frame[0], &frame[1]);
-	glfwGetWindowSize(window, &frame[2], &frame[3]);
-	int width, height;
-	glfwGetFramebufferSize(window, &width, &height);
-	const float scale = float(width) / float((std::max)(frame[2], 1));
-	renderer.resizeAndRescale(width, height, scale);
-	
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	ImGui::StyleColorsDark();
-	ImGui::GetStyle().FrameRounding = 3;
-	io.IniFilename = NULL;
-	
-	ImGui_ImplGlfw_InitForOpenGL(window, false);
-	ImGui_ImplOpenGL3_Init("#version 330");
+		// Setup resources.
+		ResourcesManager::loadResources();
+		// Create the viewer (passing options to display them)
+		Viewer viewer(config);
 
+		// Setup ImGui for interface.
+		ImGui::CreateContext();
 
+		ImGui::configureFont(font);
+		ImGui::configureStyle();
+		
+		ImGui_ImplGlfw_InitForOpenGL(window, false);
+		ImGui_ImplOpenGL3_Init("#version 330");
 
-	const bool directRecord = args.count("export") > 0;
-	if(directRecord){
-		const int framerate = args.count("framerate") > 0 ? Configuration::parseInt(args["framerate"][0]) : 60;
-		const int bitrate = args.count("bitrate") > 0 ? Configuration::parseInt(args["bitrate"][0]) : 40;
-		const bool pngAlpha = args.count("png-alpha") > 0 ? Configuration::parseBool(args["png-alpha"][0]) : false;
-		const std::string exportPath = args["export"][0];
-		Recorder::Format format = Recorder::Format::PNG;
-		if(args.count("format") > 0){
-			const auto & formatRaw = args["format"][0];
-			if(formatRaw == "MPEG2"){
-				format = Recorder::Format::MPEG2;
-			} else if(formatRaw == "MPEG4"){
-				format = Recorder::Format::MPEG4;
+		// Load midi file if specified.
+		if(!config.lastMidiPath.empty()){
+			viewer.loadFile(config.lastMidiPath);
+		}
+		// Apply custom state.
+		State state;
+		if(!config.lastConfigPath.empty()){
+			state.load(config.lastConfigPath);
+		}
+		// Apply any extra display argument on top of the existing config.
+		state.load(config.args());
+		viewer.setState(state);
+
+		// Connect to MIDI device if specified. We do it after setting the state because there are constraints on the scroll direction when recording.
+		// But we don't want to force reverse-scroll when playing back a recorded liveplay.
+		if(!config.lastMidiDevice.empty()){
+			viewer.connectDevice(config.lastMidiDevice);
+		}
+
+		// Define utility pointer for callbacks (can be obtained back from inside the callbacks).
+		glfwSetWindowUserPointer(window, &viewer);
+		glfwSetFramebufferSizeCallback(window, resize_callback);
+		glfwSetKeyCallback(window,key_callback);
+		glfwSetScrollCallback(window,scroll_callback);
+		glfwSetCharCallback(window, ImGui_ImplGlfw_CharCallback);
+		glfwSetDropCallback(window, drop_callback);
+		glfwSwapInterval(1);
+
+		// On HiDPI screens, we might have to initially resize the framebuffers size.
+		glm::ivec4 frame(0);
+		glfwGetWindowPos(window, &frame[0], &frame[1]);
+		glfwGetWindowSize(window, &frame[2], &frame[3]);
+		int width, height;
+		glfwGetFramebufferSize(window, &width, &height);
+		const float scale = float(width) / float((std::max)(frame[2], 1));
+		viewer.resizeAndRescale(width, height, scale);
+
+		// Scale the GUI based on options. This one has to be done late, after ImGui initialisation.
+		viewer.setGUIScale(config.guiScale);
+
+		// Direct export.
+		const bool directRecord = !config.exporting.path.empty();
+		if(directRecord){
+			const bool success = viewer.startDirectRecording(config.exporting, config.windowSize);
+			if(!success){
+				// Quit.
+				performAction(SystemAction::QUIT, window, frame);
 			}
 		}
-		renderer.startDirectRecording(exportPath, format, framerate, bitrate, pngAlpha, glm::vec2(isw, ish));
+
+		if(config.fullscreen){
+			performAction(SystemAction::FULLSCREEN, window, frame);
+		}
+
+		// Start the display/interaction loop.
+		while (!glfwWindowShouldClose(window)) {
+			ImGui_ImplOpenGL3_NewFrame();
+			ImGui_ImplGlfw_NewFrame();
+			ImGui::NewFrame();
+
+			// Update the content of the window.
+			SystemAction action = viewer.draw(DEBUG_SPEED * float(glfwGetTime()));
+
+			// Perform system window action if required.
+			performAction(action, window, frame);
+
+			// Interface rendering.
+			ImGui::Render();
+			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+			//Display the result fo the current rendering loop.
+			glfwSwapBuffers(window);
+			// Update events (inputs,...).
+			glfwPollEvents();
+
+		}
+		// Refresh and save global settings.
+		viewer.updateConfiguration(config);
+		glfwGetWindowPos(window, &config.windowPos[0], &config.windowPos[1]);
+		glfwGetWindowSize(window, &config.windowSize[0], &config.windowSize[1]);
+		config.save(internalConfigPath);
+
+		ImGui_ImplOpenGL3_Shutdown();
+		ImGui_ImplGlfw_Shutdown();
+		ImGui::DestroyContext();
+		viewer.clean();
 	}
 
-	if(fullscreen){
-		performAction(SystemAction::FULLSCREEN, window, frame);
-	}
-
-	// Start the display/interaction loop.
-	while (!glfwWindowShouldClose(window)) {
-		ImGui_ImplOpenGL3_NewFrame();
-		ImGui_ImplGlfw_NewFrame();
-		ImGui::NewFrame();
-
-		// Update the content of the window.
-		SystemAction action = renderer.draw(DEBUG_SPEED*float(glfwGetTime()));
-
-		// Perform system window action if required.
-		performAction(action, window, frame);
-
-		// Interface rendering.
-		ImGui::Render();
-		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-		//Display the result fo the current rendering loop.
-		glfwSwapBuffers(window);
-		// Update events (inputs,...).
-		glfwPollEvents();
-		
-	}
-	
-	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-	ImGui::DestroyContext();
-	renderer.clean();
 	// Remove the window.
 	glfwDestroyWindow(window);
 	// Clean other resources
 	// Close GL context and any other GLFW resources.
 	glfwTerminate();
+	sr_gui_cleanup();
 	return 0;
 }
 
