@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.8)
+
+# macOS specific settings (force Universal binary)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.12" CACHE STRING "Minimum OS X deployment version")
+set(CMAKE_OSX_ARCHITECTURES "$(ARCHS_STANDARD)" CACHE STRING "" FORCE)
 
 project(MIDIVisualizer)
 set(CMAKE_CXX_STANDARD 11)
@@ -152,6 +155,7 @@ target_link_libraries(MIDIVisualizer PRIVATE sr_gui glfw libremidi ${GLFW_LIBRAR
 add_dependencies(MIDIVisualizer Packaging)
 
 # Add dependency to FFmpeg if available.
+message(STATUS "Archi" ${CMAKE_OSX_ARCHITECTURES})
 if(FFMPEG_FOUND)
 	message(STATUS "FFmpeg found, enabling video export.")
 	target_compile_definitions(MIDIVisualizer PRIVATE MIDIVIZ_SUPPORT_VIDEO)
