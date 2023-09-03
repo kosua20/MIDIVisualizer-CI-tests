@@ -25,7 +25,7 @@ jobs:
             cmake-opts: -G Xcode
             artifact_name: build/MIDIVisualizer.app
             asset_name: MIDIVisualizer-macos.zip
-            ffmpeg-archive: ffmpeg-osx-64-static-lgpl.zip
+            ffmpeg-archive: ffmpeg-osx-uni64-static-lgpl.zip
     
     runs-on: ${{ matrix.os }}
 
