@@ -11,17 +11,17 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-20.04
+          - os: ubuntu-24.04
             cmake-opts: -D CMAKE_C_COMPILER=gcc-9 -D CMAKE_CXX_COMPILER=g++-9
             artifact_name: build/MIDIVisualizer
             asset_name: MIDIVisualizer-ubuntu20.zip
             ffmpeg-archive: ffmpeg-ubuntu20-64-static-lgpl.zip
-          - os: windows-2019
+          - os: windows-2025
             cmake-opts: -A x64
             artifact_name: build/Release/MIDIVisualizer.exe
             asset_name: MIDIVisualizer-windows-64bits.zip
             ffmpeg-archive: ffmpeg-windows-64-static-lgpl.zip
-          - os: macos-11
+          - os: macos-15
             cmake-opts: -G Xcode
             artifact_name: build/Release/MIDIVisualizer.app
             asset_name: MIDIVisualizer-macos.zip

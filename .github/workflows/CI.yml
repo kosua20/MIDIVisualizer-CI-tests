@@ -11,11 +11,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-20.04
+          - os: ubuntu-24.04
             cmake-opts: 
-          - os: windows-2019
+          - os: windows-2025
             cmake-opts: -A x64
-          - os: macos-11
+          - os: macos-15
             cmake-opts: -G Xcode
     
     runs-on: ${{ matrix.os }}
